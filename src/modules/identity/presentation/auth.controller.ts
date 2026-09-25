@@ -41,11 +41,15 @@ export class AuthController {
 
   // El refresh token viaja en cookie HttpOnly (inaccesible desde JS) y el
   // token de acceso, corto, en el cuerpo — el frontend lo guarda en memoria.
+  // En producción frontend (Vercel) y backend (Heroku) son orígenes
+  // distintos: sin SameSite=None el navegador no envía la cookie en el
+  // fetch de /auth/refresh y la sesión se cae a los 15 min. En local,
+  // mismo origen vía proxy, Lax es suficiente y no exige HTTPS.
   private issue(res: Response, session: AuthenticatedSession) {
     res.cookie(REFRESH_COOKIE, session.refreshToken, {
       httpOnly: true,
       secure: this.secureCookies,
-      sameSite: 'lax',
+      sameSite: this.secureCookies ? 'none' : 'lax',
       path: REFRESH_COOKIE_PATH,
       expires: session.refreshExpiresAt,
     });
