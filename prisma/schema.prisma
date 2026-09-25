@@ -1,0 +1,566 @@
+// Assessment — esquema de datos standalone.
+//
+// Tres bloques:
+//   1. Identidad y acceso (User, Organisation, RBAC: AppModule/AppModulePermission/AuthRole/AuthUserRole)
+//   2. Auditoría (ActivityLog)
+//   3. Dominio Assessment (perfiles, plantillas, evaluaciones, riesgos, medidas)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Identidad y acceso ─────────────────────────
+
+model Organisation {
+  id        String    @id // slug legible, p.ej. "demo" — se usa como `:org` en las rutas
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  name String
+
+  members      OrganisationMember[]
+  userRoles    AuthUserRole[]
+  activityLogs ActivityLog[]
+
+  // Integridad de tenant: todo dato de evaluación pertenece a una organización existente
+  assessmentProfiles    AssessmentOrganisationProfile[]
+  assessmentTemplates   AssessmentTemplate[]
+  assessmentEvaluations AssessmentEvaluation[]
+  indicatorMeasures     AssessmentIndicatorMeasure[]
+  riskCountryParams     AssessmentRiskCountryParam[]
+}
+
+model User {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  email        String  @unique
+  passwordHash String? // null cuando el usuario solo entra por OAuth
+  name         String?
+  isSuperAdmin Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  // OAuth (opcional): proveedor + id externo, p.ej. ("google", sub)
+  oauthProvider String?
+  oauthSubject  String?
+
+  memberships   OrganisationMember[]
+  userRoles     AuthUserRole[]
+  activityLogs  ActivityLog[]
+  refreshTokens RefreshToken[]
+
+  @@unique([oauthProvider, oauthSubject])
+}
+
+// Refresh token rotatorio (cookie HttpOnly). Se guarda solo el hash SHA-256;
+// `familyId` agrupa la cadena de rotaciones para detectar reuso: si se
+// presenta un token ya rotado, se revoca toda la familia.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  familyId  String
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+// Membresía: qué organizaciones puede ver un usuario 
+model OrganisationMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, userId])
+  @@index([userId])
+}
+
+model AppModule {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  code        String  @unique // "assessment-core", "organizational-tool", ...
+  name        String
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  permissions AppModulePermission[]
+
+  @@index([code])
+}
+
+model AppModulePermission {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  moduleId String
+  module   AppModule @relation(fields: [moduleId], references: [id])
+
+  code        String // "read", "write", "delete", "admin"
+  name        String
+  description String?
+
+  rolePermissions AuthRolePermission[]
+
+  @@unique([moduleId, code])
+  @@index([moduleId])
+}
+
+// Roles (organisation = null → plantilla de sistema, p.ej. assessment_admin)
+model AuthRole {
+  id           String    @id @default(cuid())
+  organisation String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  code        String
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  permissions AuthRolePermission[]
+  userRoles   AuthUserRole[]
+
+  @@unique([organisation, code])
+  @@index([organisation])
+  @@index([code])
+}
+
+model AuthRolePermission {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  roleId String
+  role   AuthRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  permissionId String
+  permission   AppModulePermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  grantedBy String?
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// Asignación de rol a usuario dentro de una organización (deletedAt = revocación)
+model AuthUserRole {
+  id           String       @id @default(cuid())
+  organisation String
+  org          Organisation @relation(fields: [organisation], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roleId String
+  role   AuthRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedBy        String?
+  customPermissions Json?
+
+  @@unique([organisation, userId, roleId])
+  @@index([organisation])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// ───────────────────────── Auditoría ─────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  organisation String
+  org          Organisation @relation(fields: [organisation], references: [id], onDelete: Cascade)
+  createdById  String
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  type        String // p.ej. "assessment-evaluation.complete"
+  note        String
+  level       String @default("INFO") // INFO | WARNING | ERROR | DEBUG
+  sourceType  String @default("UI")
+  dataPreview Json
+  data        Json
+
+  ipAddress String?
+  userAgent String?
+  requestId String?
+
+  @@index([organisation, type, createdAt])
+  @@index([organisation, level, createdAt])
+  @@index([createdAt])
+}
+
+// ───────────────────────── Assessment ─────────────────────────
+
+enum AssessmentTool {
+  ORGANIZATIONAL // Diagnóstico de Fortalecimiento Organizativo (73 KPI, 6 dimensiones)
+  CAPACITY // Análisis de Capacidades (65 KPI, 4 áreas estratégicas)
+  RISK // Identificación y Gestión de Riesgos (46 KPI, 4 principios)
+}
+
+// NOTA (RF-01): NO se crea un modelo/enum propio de roles. Los roles viven en el
+// subsistema real de autorización: AuthRole (code, p.ej. 'assessment_admin'),
+// AuthRolePermission → AppModulePermission → AppModule, y la asignación por usuario en
+// AuthUserRole (organisation, userId, roleId, assignedBy, deletedAt = revocación).
+// Un modelo AssessmentRoleAssignment duplicaría AuthUserRole. Detalle: doc 03 §2.0.
+
+enum AssessmentEvaluationStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum AssessmentRiskClass {
+  NEGLIGIBLE // despreciable
+  NON_NEGLIGIBLE // no despreciable → genera medidas de mitigación (RF-06)
+}
+
+enum AssessmentMeasureStatus {
+  PENDING // "por ejecutar"  (avance = 0%)
+  IN_PROGRESS // "en ejecución"  (1–99%)
+  DONE // "concluido"     (100%)
+}
+
+// RF-02: organización evaluada (asociación de productores o empresa)
+model AssessmentOrganisationProfile {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organisation      String // organización dueña del dato
+  organisationRef   Organisation @relation(fields: [organisation], references: [id])
+  name              String
+  tradeName         String? // nombre comercial
+  type              String // "ASSOCIATION" | "COMPANY"
+  // Solo aplica cuando type = "ASSOCIATION": "LEVEL_1" | "LEVEL_2" (tiene otras asociaciones)
+  associationLevel  String?
+  country           String // determina parámetros de riesgo en Risk
+  region            String?
+  yearStarted       Int? // año de inicio de actividades
+  memberCount       Int? // número de socios
+  mainActivity      String? // actividad principal (p.ej. "Exportación de cacao...")
+  mainProduct       String // "cacao" | "café" | otro
+  secondaryProducts String? // otros productos (opcional)
+  certifications    String?
+  mainMarkets       String? // principales mercados
+  legalRep          String?
+  contactEmail      String?
+  contactPhone      String?
+  evaluatorId       String? // evaluador responsable asignado
+  confidential      Boolean      @default(false) // excluye este perfil de la vista cross-organización del Administrador (RF-08)
+
+  // Solo se usa cuando el padre es type="ASSOCIATION" y associationLevel="LEVEL_2"
+  // (una asociación Nivel 2 agrupa empresas y/o asociaciones Nivel 1 como miembros).
+  parentProfileId String?
+  parentProfile   AssessmentOrganisationProfile?  @relation("AssessmentProfileHierarchy", fields: [parentProfileId], references: [id])
+  childProfiles   AssessmentOrganisationProfile[] @relation("AssessmentProfileHierarchy")
+
+  evaluations         AssessmentEvaluation[]
+  sectionExclusions   AssessmentProfileSectionExclusion[]
+  indicatorExclusions AssessmentProfileIndicatorExclusion[]
+
+  @@unique([organisation, name]) // nombre único dentro del sistema (RF-02)
+  @@index([organisation])
+  @@index([evaluatorId])
+  @@index([parentProfileId])
+}
+
+// Estructura de herramienta. Cambios de estructura solo aplican a evaluaciones nuevas:
+// se implementa con versionado inmutable (nueva versión = nueva fila de template).
+// Parámetros de riesgo por país (Herramienta de Riesgos): el país de la
+// organización evaluada determina el umbral de despreciabilidad efectivo
+// (countryParam ?? template.riskThreshold). Configurable por administración.
+model AssessmentRiskCountryParam {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation    String
+  organisationRef Organisation @relation(fields: [organisation], references: [id])
+  country         String // ISO 3166-1 alpha-2, p.ej. "EC"
+  riskThreshold   Decimal
+  updatedBy       String?
+
+  @@unique([organisation, country])
+}
+
+model AssessmentTemplate {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organisation    String
+  organisationRef Organisation   @relation(fields: [organisation], references: [id])
+  tool            AssessmentTool
+  version         Int            @default(1)
+  name            String
+  description     String?
+  active          Boolean        @default(true)
+  labels          Json? // i18n es/en, mismo mecanismo que AssessmentTemplate.labels
+  createdBy       String?
+
+  // Risk: umbral de despreciabilidad configurable (score > threshold ⇒ NEGLIGIBLE).
+  // RF-02: "el país determina los parámetros de riesgo" — el override por país vive en
+  // packages/config (countryRiskParams); el servicio Risk resuelve el umbral efectivo
+  // como countryRiskParams[profile.country] ?? riskThreshold.
+  riskThreshold Decimal? @default(5)
+
+  sections    AssessmentSection[]
+  evaluations AssessmentEvaluation[]
+
+  @@unique([organisation, tool, version])
+  @@index([organisation, tool])
+}
+
+// Sección = dimensión (Organizational) | área estratégica (Capacity) | principio (Risk)
+model AssessmentSection {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  number      Int // "número" del RF-03/04/05
+  name        String
+  description String?
+  weight      Decimal @default(1) // peso para el promedio ponderado global
+  sortOrder   Int     @default(0)
+
+  indicators AssessmentIndicator[]
+  exclusions AssessmentProfileSectionExclusion[]
+
+  @@unique([templateId, number])
+  @@index([templateId])
+}
+
+model AssessmentIndicator {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sectionId String
+  section   AssessmentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  code          String // p.ej. "A-1.3" — estable para paridad con Excel
+  name          String
+  description   String?
+  helpText      String? // qué documento/proceso concreto debe existir para este KPI
+  scoringRubric String? // nota específica de este KPI, se muestra junto a la rúbrica genérica 1-10
+  weight        Decimal @default(1) // peso del KPI dentro de la sección
+  active        Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  responses         AssessmentResponse[]
+  indicatorMeasures AssessmentIndicatorMeasure[]
+  exclusions        AssessmentProfileIndicatorExclusion[]
+
+  @@unique([sectionId, code])
+  @@index([sectionId])
+}
+
+// RF-02/03/04/05: al crear o editar una organización, el evaluador puede marcar
+// secciones/indicadores completas como "no aplica" para esa organización puntual
+// (p.ej. "aplica solo si la organización realiza aprovechamiento forestal"). Es
+// una exclusión POR PERFIL, no por plantilla — no afecta a otras organizaciones
+// que compartan la misma AssessmentTemplate. Excluir una sección implica excluir todos
+// sus indicadores (se resuelve en el servicio, no se duplica aquí).
+model AssessmentProfileSectionExclusion {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  createdBy String
+
+  profileId String
+  profile   AssessmentOrganisationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sectionId String
+  section   AssessmentSection             @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, sectionId])
+  @@index([profileId])
+}
+
+model AssessmentProfileIndicatorExclusion {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  createdBy String
+
+  profileId   String
+  profile     AssessmentOrganisationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  indicatorId String
+  indicator   AssessmentIndicator           @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, indicatorId])
+  @@index([profileId])
+}
+
+model AssessmentEvaluation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organisation    String
+  organisationRef Organisation                  @relation(fields: [organisation], references: [id])
+  templateId      String
+  template        AssessmentTemplate            @relation(fields: [templateId], references: [id])
+  profileId       String
+  profile         AssessmentOrganisationProfile @relation(fields: [profileId], references: [id])
+
+  status      AssessmentEvaluationStatus @default(DRAFT)
+  startedBy   String
+  startedAt   DateTime                   @default(now())
+  completedAt DateTime?
+
+  // resultados agregados persistidos al completar (fuente de verdad: scoring.engine)
+  globalScore      Decimal?
+  sectionScores    Json? // { [sectionId]: { weightedAvg, critical } }
+  executiveSummary String? // narrativa ejecutiva (IA), opcional
+
+  responses         AssessmentResponse[]
+  risks             AssessmentRisk[]
+  indicatorMeasures AssessmentIndicatorMeasure[]
+
+  @@index([organisation])
+  @@index([profileId])
+  @@index([templateId])
+  @@index([organisation, status, updatedAt]) // dashboard RF-07: filtros + orden sin scan
+}
+
+model AssessmentResponse {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evaluationId String
+  evaluation   AssessmentEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  indicatorId  String
+  indicator    AssessmentIndicator  @relation(fields: [indicatorId], references: [id])
+
+  score       Int // 1..10 entero — validado también en DTO
+  observation String // obligatoria (RF-03/04/05)
+  isCritical  Boolean  @default(false) // score <= 5 ⇒ coloreado automático
+  scoredBy    String // trazabilidad de autoría
+  scoredAt    DateTime @default(now())
+
+  @@unique([evaluationId, indicatorId])
+  @@index([evaluationId])
+  @@index([evaluationId, isCritical]) // listar KPI críticos (plan de acción) sin scan
+}
+
+// Risk (RF-05): riesgo identificado por indicador/principio
+model AssessmentRisk {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evaluationId String
+  evaluation   AssessmentEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  indicatorId  String
+
+  description  String // riesgo identificado (obligatorio)
+  riskType     String? // tipo de riesgo
+  class        AssessmentRiskClass // calculado automáticamente según riskThreshold
+  identifiedBy String
+
+  measures AssessmentMitigationMeasure[]
+
+  @@unique([evaluationId, indicatorId]) // un riesgo por KPI por evaluación (upsert al puntuar)
+  @@index([evaluationId])
+}
+
+// Risk (RF-06): medida del plan de mitigación con datos para el Gantt
+model AssessmentMitigationMeasure {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  riskId String
+  risk   AssessmentRisk @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  description         String
+  responsible         String // responsable asignado (obligatorio)
+  support             String? // "apoyo" — persona/rol de soporte al responsable
+  startWeek           DateTime // lunes de la semana de inicio (selector)
+  durationDays        Int // duración estimada
+  endDate             DateTime // calculada: startWeek + durationDays (servicio)
+  resources           String?
+  budgetUsd           Decimal? // "inversión ($ USD)" estimada para la medida
+  verificationLink    String? // "medios de verificación" — enlace/evidencia de cumplimiento
+  progressPct         Int                     @default(0) // 0..100
+  status              AssessmentMeasureStatus @default(PENDING) // derivado de progressPct
+  expectedResult      String? // resultado esperado al ejecutar la medida
+  appliedImprovements String? // mejoras aplicadas / evidencia narrativa del avance
+  updatedBy           String
+
+  @@index([riskId])
+}
+
+// Medida de mejora ligada directamente a un KPI crítico de una evaluación.
+// Tabla única para las herramientas basadas en KPI (Organizativa y de Capacidades):
+// la herramienta se deriva de evaluation.template.tool. La Herramienta de Riesgos
+// usa AssessmentMitigationMeasure porque su agregado es el riesgo, no el KPI.
+model AssessmentIndicatorMeasure {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organisation    String
+  organisationRef Organisation @relation(fields: [organisation], references: [id])
+
+  evaluationId String
+  evaluation   AssessmentEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  indicatorId  String
+  indicator    AssessmentIndicator  @relation(fields: [indicatorId], references: [id])
+
+  name                String
+  description         String?
+  responsible         String // responsable asignado (obligatorio)
+  support             String? // "apoyo" — persona/rol de soporte al responsable
+  startDate           DateTime
+  endDate             DateTime
+  budgetUsd           Decimal? // "inversión ($ USD)" estimada para la medida
+  verificationLink    String? // "medios de verificación" — enlace/evidencia de cumplimiento
+  progressPct         Int                     @default(0) // 0..100
+  status              AssessmentMeasureStatus @default(PENDING) // derivado de progressPct
+  expectedResult      String? // resultado esperado al ejecutar la medida
+  appliedImprovements String? // mejoras aplicadas / evidencia narrativa del avance
+  updatedBy           String
+
+  @@index([evaluationId])
+  @@index([indicatorId])
+}
