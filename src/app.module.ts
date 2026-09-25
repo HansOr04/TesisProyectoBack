@@ -10,6 +10,8 @@ import { OrganizationalToolModule } from './modules/organizational-tool/organiza
 import { AssessmentCoreModule } from './modules/assessment-core/assessment-core.module';
 import { AssessmentSessionModule } from './modules/assessment-session/assessment-session.module';
 import { AssessmentAnalyticsModule } from './modules/assessment-analytics/assessment-analytics.module';
+import { CapacityToolModule } from './modules/capacity-tool/capacity-tool.module';
+import { RiskToolModule } from './modules/risk-tool/risk-tool.module';
 import { validateEnv } from './shared/infrastructure/config/env.validation';
 import { PrismaModule } from './shared/infrastructure/database/prisma.module';
 import { RequestIdMiddleware } from './shared/infrastructure/http/request-id.middleware';
@@ -32,6 +34,8 @@ import { HealthController } from './shared/infrastructure/http/health.controller
     AssessmentCoreModule,
     OrganizationalToolModule,
     AssessmentAnalyticsModule,
+    CapacityToolModule,
+    RiskToolModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
