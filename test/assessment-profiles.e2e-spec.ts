@@ -89,7 +89,13 @@ describe('Assessment profiles (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post(`/${ORG}/assessments/profiles`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name, type: 'ASSOCIATION', country: 'EC', mainProduct: 'cacao' })
+      .send({
+        name,
+        type: 'ASSOCIATION',
+        country: 'EC',
+        mainProduct: 'cacao',
+        memberCount: 40,
+      })
       .expect(201);
     createdProfileIds.push(created.body.id);
 
@@ -119,19 +125,108 @@ describe('Assessment profiles (e2e)', () => {
       .expect(404);
   });
 
+  // Flujo del asistente en modo edición: se reenvían todos los datos del alta
+  // y la aplicabilidad de KPI en la misma operación.
+  it('edits every field captured by the wizard, including applicability', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/${ORG}/assessments/profiles`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: `E2E Edición ${Date.now()}`,
+        type: 'ASSOCIATION',
+        country: 'EC',
+        mainProduct: 'cacao',
+        memberCount: 40,
+      })
+      .expect(201);
+    createdProfileIds.push(created.body.id);
+
+    const changes = {
+      name: `E2E Editada ${Date.now()}`,
+      tradeName: 'Nombre Comercial S.A.',
+      type: 'COMPANY',
+      country: 'CO',
+      region: 'Antioquia',
+      yearStarted: 2011,
+      memberCount: 240,
+      mainActivity: 'Acopio y exportación',
+      mainProduct: 'café',
+      secondaryProducts: 'miel',
+      certifications: 'Orgánico',
+      mainMarkets: 'UE',
+      contactEmail: 'contacto@ejemplo.org',
+      contactPhone: '+593999999999',
+    };
+    const updated = await request(app.getHttpServer())
+      .patch(`/${ORG}/assessments/profiles/${created.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(changes)
+      .expect(200);
+    expect(updated.body).toMatchObject(changes);
+
+    // La aplicabilidad se guarda aparte pero desde el mismo paso del asistente.
+    const template = await request(app.getHttpServer())
+      .get(`/${ORG}/assessments/organizational/templates`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const section = template.body[0].sections[0];
+    await request(app.getHttpServer())
+      .put(`/${ORG}/assessments/profiles/${created.body.id}/applicability`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        excludedSectionIds: [section.id],
+        excludedIndicatorIds: [section.indicators[0].id],
+      })
+      .expect(200);
+
+    const applicability = await request(app.getHttpServer())
+      .get(`/${ORG}/assessments/profiles/${created.body.id}/applicability`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(applicability.body.excludedSectionIds).toEqual([section.id]);
+    expect(applicability.body.excludedIndicatorIds).toEqual([
+      section.indicators[0].id,
+    ]);
+
+    // Y se puede volver a dejar sin exclusiones (quitar también es editar).
+    await request(app.getHttpServer())
+      .put(`/${ORG}/assessments/profiles/${created.body.id}/applicability`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ excludedSectionIds: [], excludedIndicatorIds: [] })
+      .expect(200);
+    const cleared = await request(app.getHttpServer())
+      .get(`/${ORG}/assessments/profiles/${created.body.id}/applicability`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(cleared.body.excludedSectionIds).toEqual([]);
+    expect(cleared.body.excludedIndicatorIds).toEqual([]);
+  });
+
   it('rejects duplicated profile names within the organisation', async () => {
     const name = `E2E Duplicada ${Date.now()}`;
     const first = await request(app.getHttpServer())
       .post(`/${ORG}/assessments/profiles`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name, type: 'COMPANY', country: 'EC', mainProduct: 'café' })
+      .send({
+        name,
+        type: 'COMPANY',
+        country: 'EC',
+        mainProduct: 'café',
+        memberCount: 12,
+      })
       .expect(201);
     createdProfileIds.push(first.body.id);
 
     await request(app.getHttpServer())
       .post(`/${ORG}/assessments/profiles`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name, type: 'COMPANY', country: 'EC', mainProduct: 'café' })
+      .send({
+        name,
+        type: 'COMPANY',
+        country: 'EC',
+        mainProduct: 'café',
+        memberCount: 12,
+      })
       .expect(409);
   });
 
@@ -140,6 +235,26 @@ describe('Assessment profiles (e2e)', () => {
       .post(`/${ORG}/assessments/profiles`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'x', type: 'INVALID', country: 'EC', mainProduct: 'cacao' })
+      .expect(400);
+  });
+
+  // El número de socios dejó de ser opcional: sin él (o en 0) no se da de alta.
+  it('requires the member count (at least 1)', async () => {
+    const base = {
+      name: `E2E Sin socios ${Date.now()}`,
+      type: 'ASSOCIATION',
+      country: 'EC',
+      mainProduct: 'cacao',
+    };
+    await request(app.getHttpServer())
+      .post(`/${ORG}/assessments/profiles`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(base)
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(`/${ORG}/assessments/profiles`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ ...base, memberCount: 0 })
       .expect(400);
   });
 

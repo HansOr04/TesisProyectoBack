@@ -62,6 +62,7 @@ describe('AssessmentProfilesService (F2-B04)', () => {
       type: 'ASSOCIATION' as const,
       country: 'EC',
       mainProduct: 'cacao',
+      memberCount: 12,
     };
 
     it('creates the profile and records an audit log', async () => {
@@ -84,7 +85,6 @@ describe('AssessmentProfilesService (F2-B04)', () => {
           associationLevel: null,
           region: null,
           yearStarted: null,
-          memberCount: null,
           mainActivity: null,
           secondaryProducts: null,
           certifications: null,
