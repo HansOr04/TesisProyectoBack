@@ -55,10 +55,9 @@ export class CreateAssessmentProfileDto {
   @Max(new Date().getFullYear())
   yearStarted?: number;
 
-  @IsOptional()
   @IsInt()
-  @Min(0)
-  memberCount?: number;
+  @Min(1)
+  memberCount: number;
 
   @IsOptional()
   @IsString()
