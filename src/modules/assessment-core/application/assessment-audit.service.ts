@@ -11,6 +11,9 @@ import { RequestContextService } from '../../identity/application/request-contex
 // pueden consultar. Nuevos bloques extienden AssessmentAuditAction sin tocar
 // el resto del servicio.
 export type AssessmentAuditAction =
+  | 'organisation.create'
+  | 'organisation.update'
+  | 'organisation.reprovision'
   | 'assessment-role.assign'
   | 'assessment-role.revoke'
   | 'assessment-profile.create'
