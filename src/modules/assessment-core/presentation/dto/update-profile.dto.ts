@@ -53,7 +53,7 @@ export class UpdateAssessmentProfileDto {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
+  @Min(1)
   memberCount?: number;
 
   @IsOptional()
