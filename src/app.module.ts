@@ -7,10 +7,10 @@ import { AuditModule } from './modules/audit/audit.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AssessmentAiModule } from './modules/assessment-ai/assessment-ai.module';
 import { OrganizationalToolModule } from './modules/organizational-tool/organizational-tool.module';
-import { AssessmentCoreModule } from './modules/assessment-core/assessment-core.module';
-import { AssessmentSessionModule } from './modules/assessment-session/assessment-session.module';
 import { AssessmentAnalyticsModule } from './modules/assessment-analytics/assessment-analytics.module';
+import { AssessmentCoreModule } from './modules/assessment-core/assessment-core.module';
 import { CapacityToolModule } from './modules/capacity-tool/capacity-tool.module';
+import { AssessmentSessionModule } from './modules/assessment-session/assessment-session.module';
 import { RiskToolModule } from './modules/risk-tool/risk-tool.module';
 import { validateEnv } from './shared/infrastructure/config/env.validation';
 import { PrismaModule } from './shared/infrastructure/database/prisma.module';
@@ -33,9 +33,9 @@ import { HealthController } from './shared/infrastructure/http/health.controller
     AssessmentAiModule,
     AssessmentCoreModule,
     OrganizationalToolModule,
-    AssessmentAnalyticsModule,
     CapacityToolModule,
     RiskToolModule,
+    AssessmentAnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

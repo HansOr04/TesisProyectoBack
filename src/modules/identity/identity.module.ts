@@ -2,6 +2,8 @@ import { Global, Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { OrganisationManagementService } from './application/organisation-management.service';
+import { OrganisationManagementController } from './presentation/organisation-management.controller';
 import { RefreshTokenService } from './application/refresh-token.service';
 import { AuthService } from './application/auth.service';
 import { AuthorizationService } from './application/authorization.service';
@@ -33,9 +35,14 @@ import { JwtAuthGuard } from './presentation/guards/jwt-auth.guard';
       }),
     }),
   ],
-  controllers: [AuthController, UserManagementController],
+  controllers: [
+    AuthController,
+    UserManagementController,
+    OrganisationManagementController,
+  ],
   providers: [
     AuthService,
+    OrganisationManagementService,
     RefreshTokenService,
     UserManagementService,
     AuthorizationService,
