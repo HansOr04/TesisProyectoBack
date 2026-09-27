@@ -11,6 +11,7 @@ import { PrismaTemplateRepository } from '../../evaluation-tool/infrastructure/p
 import { PrismaEvaluationRepository } from '../../evaluation-tool/infrastructure/persistence/prisma-evaluation.repository';
 import { PrismaRiskRepository } from '../infrastructure/persistence/prisma-risk.repository';
 import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
+import { ConsolidatedPlanService } from '../../assessment-core/application/consolidated-plan.service';
 import { AssessmentApplicabilityService } from '../../assessment-core/application/assessment-applicability.service';
 import { AssessmentSessionGateway } from '../../assessment-session/infrastructure/assessment-session.gateway';
 import { RiskToolAiService } from './risk-tool-ai.service';
@@ -138,6 +139,7 @@ describe('RiskToolService (F4-B03/B04)', () => {
       ),
       new PrismaEvaluationRepository(prismaService),
       new PrismaRiskRepository(prismaService),
+      new ConsolidatedPlanService(prismaService),
       audit as unknown as AssessmentAuditService,
       ai as unknown as RiskToolAiService,
       applicability as unknown as AssessmentApplicabilityService,

@@ -343,6 +343,7 @@ export class RiskToolController {
       id,
       dto.narrative,
       user?.id,
+      dto.ganttScope,
     );
     res.setHeader('Content-Type', result.contentType);
     res.setHeader(

@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { CRITICAL_THRESHOLD } from '../../assessment-core/domain/assessment.constants';
 import { RiskStrategy } from '../../assessment-core/domain/scoring.engine';
+import {
+  ConsolidatedPlanScope,
+  ConsolidatedPlanService,
+} from '../../assessment-core/application/consolidated-plan.service';
 import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
 import { AssessmentApplicabilityService } from '../../assessment-core/application/assessment-applicability.service';
 import { AssessmentSessionGateway } from '../../assessment-session/infrastructure/assessment-session.gateway';
@@ -88,6 +92,7 @@ export class RiskToolService extends EvaluationToolService {
     @Inject(TEMPLATE_REPOSITORY) templates: TemplateRepository,
     @Inject(EVALUATION_REPOSITORY) evaluations: EvaluationRepository,
     @Inject(RISK_REPOSITORY) private readonly risks: RiskRepository,
+    private readonly consolidatedPlan: ConsolidatedPlanService,
     auditService: AssessmentAuditService,
     private readonly riskAi: RiskToolAiService,
     applicabilityService: AssessmentApplicabilityService,
@@ -359,6 +364,7 @@ export class RiskToolService extends EvaluationToolService {
     evaluationId: string,
     narrative?: string,
     actorId?: string,
+    ganttScope: ConsolidatedPlanScope = 'tool',
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -402,6 +408,12 @@ export class RiskToolService extends EvaluationToolService {
       evaluation.profileId,
     );
 
+    const consolidatedGantt = await this.consolidatedPlan.gantt(
+      organisation,
+      ganttScope,
+      evaluation.profileId,
+    );
+
     const file = await buildMitigationPlanPptx(this.definition, {
       evaluation,
       sectionScores,
@@ -410,6 +422,7 @@ export class RiskToolService extends EvaluationToolService {
       history,
       narrative: finalNarrative,
       insights,
+      consolidatedGantt,
     });
 
     await this.auditService.record(

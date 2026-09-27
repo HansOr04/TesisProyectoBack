@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
+import { ConsolidatedPlanService } from '../../assessment-core/application/consolidated-plan.service';
 import { AssessmentApplicabilityService } from '../../assessment-core/application/assessment-applicability.service';
 import { AssessmentSessionGateway } from '../../assessment-session/infrastructure/assessment-session.gateway';
 import { PrismaEvaluationRepository } from '../../evaluation-tool/infrastructure/persistence/prisma-evaluation.repository';
@@ -38,6 +39,7 @@ describe('CapacityToolService (definición de la herramienta)', () => {
       ),
       new PrismaEvaluationRepository(prismaService),
       new PrismaIndicatorMeasureRepository(prismaService),
+      new ConsolidatedPlanService(prismaService),
       audit as unknown as AssessmentAuditService,
       {} as CapacityToolAiService,
       {} as AssessmentApplicabilityService,

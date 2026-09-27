@@ -26,6 +26,10 @@ import {
   MeasureStatus,
 } from '../domain/evaluation-tool.types';
 import {
+  ConsolidatedPlanScope,
+  ConsolidatedPlanService,
+} from '../../assessment-core/application/consolidated-plan.service';
+import {
   buildSummaryExcel,
   buildSummaryPptx,
 } from '../infrastructure/reports/evaluation-report.builders';
@@ -65,6 +69,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     templates: TemplateRepository,
     evaluations: EvaluationRepository,
     protected readonly measures: IndicatorMeasureRepository,
+    protected readonly consolidatedPlan: ConsolidatedPlanService,
     auditService: AssessmentAuditService,
     aiService: EvaluationToolAiService,
     applicabilityService: AssessmentApplicabilityService,
@@ -119,6 +124,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     evaluationId: string,
     narrative?: string,
     actorId?: string,
+    ganttScope: ConsolidatedPlanScope = 'tool',
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -153,6 +159,12 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
       evaluation.profileId,
     );
 
+    const consolidatedGantt = await this.consolidatedPlan.gantt(
+      organisation,
+      ganttScope,
+      evaluation.profileId,
+    );
+
     const file = await buildSummaryPptx(this.definition, {
       evaluation,
       sectionScores,
@@ -161,12 +173,13 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
       history,
       narrative: finalNarrative,
       insights,
+      consolidatedGantt,
     });
 
     await this.auditService.record(
       organisation,
       'assessment-export.generate',
-      { evaluationId, format: 'pptx' },
+      { evaluationId, format: 'pptx', ganttScope },
       actorId,
     );
     return file;

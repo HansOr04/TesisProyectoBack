@@ -294,6 +294,7 @@ export function createIndicatorToolController(
           id,
           dto.narrative,
           user?.id,
+          dto.ganttScope,
         ),
       );
     }
