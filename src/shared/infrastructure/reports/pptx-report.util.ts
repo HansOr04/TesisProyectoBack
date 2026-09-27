@@ -551,6 +551,198 @@ export function addDonutChartSlide(
   );
 }
 
+export type GaugeItem = { label: string; score: number; caption?: string };
+
+// Mismo amarillo que el velocímetro de la aplicación: la franja media de la
+// carátula no usa el naranja de SCORE_COLORS.medium.
+const GAUGE_YELLOW = 'EAB308';
+
+// Ángulos OOXML: 0° al este y creciendo en sentido horario, así que el
+// semicírculo superior va de 180° (izquierda, puntaje 0) a 360°/0° (derecha,
+// puntaje 10), pasando por 270° arriba. Los cortes de color son los mismos
+// que en pantalla: rojo 0-5, amarillo 5-7, verde 7-10.
+const GAUGE_ZONES: Array<[number, number, string]> = [
+  [180, 270, REPORT_COLORS.tierRed],
+  [270, 306, GAUGE_YELLOW],
+  [306, 0, REPORT_COLORS.tierGreen],
+];
+
+function gaugeAngle(score: number): number {
+  return 180 + Math.max(0, Math.min(10, score)) * 18;
+}
+
+/**
+ * Dibuja un velocímetro con formas nativas de PowerPoint (nada de imágenes):
+ * tres arcos de color, aguja y valor. `d` es el diámetro; el arco ocupa la
+ * mitad superior de ese cuadrado y el texto cae justo debajo del eje.
+ */
+function drawGauge(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  opts: {
+    x: number;
+    y: number;
+    d: number;
+    item: GaugeItem;
+    valueFontSize: number;
+    labelFontSize: number;
+  },
+): void {
+  const { x, y, d, item } = opts;
+  const cx = x + d / 2;
+  const cy = y + d / 2;
+  const score = Math.max(0, Math.min(10, item.score));
+
+  for (const [from, to, color] of GAUGE_ZONES) {
+    slide.addShape(pptx.ShapeType.blockArc, {
+      x,
+      y,
+      w: d,
+      h: d,
+      angleRange: [from, to],
+      arcThicknessRatio: 0.18,
+      fill: { color },
+      line: { color, width: 0 },
+    });
+  }
+
+  // La aguja es un rectángulo fino cuyo centro se coloca a media longitud
+  // sobre el ángulo del puntaje; al rotarlo sobre su centro, un extremo cae
+  // exactamente en el eje del velocímetro.
+  const theta = gaugeAngle(score);
+  const rad = (theta * Math.PI) / 180;
+  const len = (d / 2) * 0.66;
+  const thickness = Math.max(0.03, d * 0.022);
+  slide.addShape(pptx.ShapeType.rect, {
+    x: cx + (len / 2) * Math.cos(rad) - len / 2,
+    y: cy + (len / 2) * Math.sin(rad) - thickness / 2,
+    w: len,
+    h: thickness,
+    rotate: theta,
+    fill: { color: REPORT_COLORS.darkHeading },
+    line: { color: REPORT_COLORS.darkHeading, width: 0 },
+  });
+  const pivot = Math.max(0.08, d * 0.055);
+  slide.addShape(pptx.ShapeType.ellipse, {
+    x: cx - pivot / 2,
+    y: cy - pivot / 2,
+    w: pivot,
+    h: pivot,
+    fill: { color: REPORT_COLORS.darkHeading },
+    line: { color: REPORT_COLORS.darkHeading, width: 0 },
+  });
+
+  const valueH = opts.valueFontSize / 55;
+  slide.addText(score.toFixed(1), {
+    x,
+    y: cy + pivot * 0.6,
+    w: d,
+    h: valueH,
+    fontSize: opts.valueFontSize,
+    bold: true,
+    align: 'center',
+    color: tierColor(score),
+    fontFace: FONT_HEAD,
+  });
+  slide.addText(truncate(item.label, 46), {
+    x: x - d * 0.12,
+    y: cy + pivot * 0.6 + valueH,
+    w: d * 1.24,
+    h: 0.5,
+    fontSize: opts.labelFontSize,
+    align: 'center',
+    valign: 'top',
+    color: REPORT_COLORS.textBody,
+    fontFace: FONT_BODY,
+  });
+  if (item.caption) {
+    slide.addText(item.caption, {
+      x: x - d * 0.12,
+      y: cy + pivot * 0.6 + valueH + 0.42,
+      w: d * 1.24,
+      h: 0.3,
+      fontSize: opts.labelFontSize - 1,
+      align: 'center',
+      color: REPORT_COLORS.textMuted,
+      fontFace: FONT_BODY,
+    });
+  }
+}
+
+/**
+ * Lámina de velocímetros: el global en grande a la izquierda y uno por
+ * sección a la derecha. Es el mismo gráfico que se ve en la aplicación, para
+ * que el reporte no obligue a traducir una tabla de números a una idea de
+ * "qué tan bien vamos".
+ */
+export function addGaugeSlide(
+  pptx: PptxGenJS,
+  opts: {
+    title: string;
+    subtitle?: string;
+    global: GaugeItem;
+    items: GaugeItem[];
+  },
+): void {
+  const PER_SLIDE = 6;
+  const COLUMNS = 3;
+  const chunks: GaugeItem[][] = [];
+  for (let i = 0; i < opts.items.length; i += PER_SLIDE) {
+    chunks.push(opts.items.slice(i, i + PER_SLIDE));
+  }
+  if (chunks.length === 0) chunks.push([]);
+
+  chunks.forEach((items, chunkIdx) => {
+    const slide = pptx.addSlide();
+    addSectionHeader(
+      pptx,
+      slide,
+      chunkIdx === 0 ? opts.title : `${opts.title} (cont.)`,
+      chunkIdx === 0 ? opts.subtitle : undefined,
+    );
+
+    // El velocímetro global solo va en la primera lámina; en las siguientes
+    // las secciones aprovechan todo el ancho.
+    const gridX = chunkIdx === 0 ? 4.6 : 1.2;
+    const gridW = SLIDE_W - gridX - 0.7;
+
+    if (chunkIdx === 0) {
+      slide.addShape(pptx.ShapeType.roundRect, {
+        x: 0.55,
+        y: 1.75,
+        w: 3.7,
+        h: 4.15,
+        rectRadius: 0.1,
+        fill: { color: REPORT_COLORS.panelBg },
+        line: { color: REPORT_COLORS.borderGray, width: 1 },
+      });
+      drawGauge(pptx, slide, {
+        x: 0.8,
+        y: 2.2,
+        d: 3.2,
+        item: opts.global,
+        valueFontSize: 34,
+        labelFontSize: 12,
+      });
+    }
+
+    const cellW = gridW / COLUMNS;
+    const gaugeD = Math.min(1.95, cellW - 0.35);
+    items.forEach((item, idx) => {
+      const col = idx % COLUMNS;
+      const row = Math.floor(idx / COLUMNS);
+      drawGauge(pptx, slide, {
+        x: gridX + col * cellW + (cellW - gaugeD) / 2,
+        y: 1.95 + row * 2.45,
+        d: gaugeD,
+        item,
+        valueFontSize: 20,
+        labelFontSize: 9.5,
+      });
+    });
+  });
+}
+
 function addNumberedCardsSlide(
   pptx: PptxGenJS,
   opts: { title: string; items: string[]; accentColor: string },

@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/infrastructure/reports/excel-cell.util';
 import {
   addBarChartSlide,
+  addGaugeSlide,
   addClosingSlide,
   addCoverSlide,
   addEvolutionSlide,
@@ -13,6 +14,7 @@ import {
   addKpiStatusSlide,
   addRecommendationsSlide,
   addTimelineSlide,
+  TimelineMeasure,
   createReportPptx,
   KpiPlanStatus,
   writePptxBuffer,
@@ -112,6 +114,11 @@ export interface SummaryPptxInput {
   }[];
   narrative: string;
   insights: AiReportInsights | null;
+  /**
+   * Plan consolidado que reemplaza al Gantt propio de la herramienta cuando
+   * al exportar se pide un alcance mayor (la organización o el proyecto).
+   */
+  consolidatedGantt?: { title: string; measures: TimelineMeasure[] };
 }
 
 /** Reporte en diapositivas: portada, resumen, hallazgos, puntajes, KPI, plan, evolución. */
@@ -148,6 +155,22 @@ export async function buildSummaryPptx(
       },
     ],
     narrative: input.narrative,
+  });
+
+  // Velocímetros: la misma lectura visual que da la aplicación, para no
+  // obligar a traducir una tabla de números a "qué tan bien vamos".
+  addGaugeSlide(pptx, {
+    title: `Velocímetros por ${sectionLabel}`,
+    subtitle: `Puntaje global y por ${sectionLabel.toLowerCase()} en la escala 0-10 (rojo hasta 5, amarillo hasta 7, verde desde 7).`,
+    global: {
+      label: 'Puntaje global',
+      score: globalScore,
+      caption: `${definition.report.scoreLevelPrefix} ${scoreLevelLabel(globalScore)}`,
+    },
+    items: sectionScores.map((s) => ({
+      label: `${s.number}. ${s.name}`,
+      score: s.weightedAvg,
+    })),
   });
 
   if (insights && insights.keyFindings.length > 0) {
@@ -199,16 +222,19 @@ export async function buildSummaryPptx(
     })),
   });
 
-  addTimelineSlide(pptx, {
-    title: 'Avance del Plan de Acción',
-    measures: measures.map((m) => ({
-      name: m.name,
-      startDate: m.startDate,
-      endDate: m.endDate,
-      status: m.status,
-      progressPct: m.progressPct,
-    })),
-  });
+  addTimelineSlide(
+    pptx,
+    input.consolidatedGantt ?? {
+      title: 'Avance del Plan de Acción',
+      measures: measures.map((m) => ({
+        name: m.name,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        status: m.status,
+        progressPct: m.progressPct,
+      })),
+    },
+  );
 
   if (input.history.length > 1) {
     addEvolutionSlide(pptx, {

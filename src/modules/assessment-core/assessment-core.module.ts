@@ -5,6 +5,7 @@ import { AssessmentApplicabilityService } from './application/assessment-applica
 import { AssessmentAuditService } from './application/assessment-audit.service';
 import { AssessmentDashboardService } from './application/assessment-dashboard.service';
 import { AssessmentProfilesService } from './application/assessment-profiles.service';
+import { ConsolidatedPlanService } from './application/consolidated-plan.service';
 import { OrganisationProvisioningService } from './application/organisation-provisioning.service';
 import { AssessmentRolesService } from './application/assessment-roles.service';
 import { AssessmentDashboardExportService } from './infrastructure/assessment-dashboard-export.service';
@@ -30,6 +31,7 @@ import { AssessmentPermissionGuard } from './presentation/guards/assessment-perm
     AssessmentDashboardController,
   ],
   providers: [
+    ConsolidatedPlanService,
     OrganisationProvisioningService,
     AssessmentRolesService,
     AssessmentProfilesService,
@@ -42,6 +44,7 @@ import { AssessmentPermissionGuard } from './presentation/guards/assessment-perm
     AssessmentAiThrottlerGuard,
   ],
   exports: [
+    ConsolidatedPlanService,
     OrganisationProvisioningService,
     AssessmentRolesService,
     AssessmentProfilesService,

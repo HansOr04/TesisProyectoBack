@@ -14,6 +14,7 @@ import { PrismaTemplateRepository } from '../infrastructure/persistence/prisma-t
 import { PrismaEvaluationRepository } from '../infrastructure/persistence/prisma-evaluation.repository';
 import { PrismaIndicatorMeasureRepository } from '../infrastructure/persistence/prisma-indicator-measure.repository';
 import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
+import { ConsolidatedPlanService } from '../../assessment-core/application/consolidated-plan.service';
 import { AssessmentApplicabilityService } from '../../assessment-core/application/assessment-applicability.service';
 import { AssessmentSessionGateway } from '../../assessment-session/infrastructure/assessment-session.gateway';
 import { KpiResponseDto, ScoreKpiDto } from '../presentation/dto';
@@ -122,6 +123,7 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
       ),
       new PrismaEvaluationRepository(prismaService),
       new PrismaIndicatorMeasureRepository(prismaService),
+      new ConsolidatedPlanService(prismaService),
       audit as unknown as AssessmentAuditService,
       ai as unknown as OrganizationalToolAiService,
       applicability as unknown as AssessmentApplicabilityService,

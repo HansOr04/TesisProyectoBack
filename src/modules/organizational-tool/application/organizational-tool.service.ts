@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
+import { ConsolidatedPlanService } from '../../assessment-core/application/consolidated-plan.service';
 import { AssessmentApplicabilityService } from '../../assessment-core/application/assessment-applicability.service';
 import { AssessmentSessionGateway } from '../../assessment-session/infrastructure/assessment-session.gateway';
 import { IndicatorMeasureToolService } from '../../evaluation-tool/application/indicator-measure-tool.service';
@@ -28,6 +29,7 @@ export class OrganizationalToolService extends IndicatorMeasureToolService {
     @Inject(TEMPLATE_REPOSITORY) templates: TemplateRepository,
     @Inject(EVALUATION_REPOSITORY) evaluations: EvaluationRepository,
     @Inject(INDICATOR_MEASURE_REPOSITORY) measures: IndicatorMeasureRepository,
+    consolidatedPlan: ConsolidatedPlanService,
     auditService: AssessmentAuditService,
     aiService: OrganizationalToolAiService,
     applicabilityService: AssessmentApplicabilityService,
@@ -38,6 +40,7 @@ export class OrganizationalToolService extends IndicatorMeasureToolService {
       templates,
       evaluations,
       measures,
+      consolidatedPlan,
       auditService,
       aiService,
       applicabilityService,
