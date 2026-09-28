@@ -6,10 +6,15 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MaxLength,
 } from 'class-validator';
+
+// Prefijo de país (1-4 dígitos) + exactamente 9 dígitos del número nacional,
+// igual al formato que arma el wizard del frontend (`+<dialCode> <9 dígitos>`).
+export const CONTACT_PHONE_PATTERN = /^\+\d{1,4} \d{9}$/;
 
 export const ASSESSMENT_PROFILE_TYPES = ['ASSOCIATION', 'COMPANY'] as const;
 export type AssessmentProfileType = (typeof ASSESSMENT_PROFILE_TYPES)[number];
@@ -96,6 +101,10 @@ export class CreateAssessmentProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  @Matches(CONTACT_PHONE_PATTERN, {
+    message:
+      'contactPhone must be in the format "+<dial code> <9 digits>" (exactly 9 digits after the country prefix)',
+  })
   contactPhone?: string;
 
   @IsOptional()
