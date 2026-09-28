@@ -197,13 +197,13 @@ export class RiskToolController {
 
   @Delete(':org/assessments/risk/indicators/:id')
   @RequireAssessmentPermission('risk-tool', 'admin')
-  async deleteIndicator(
+  async deactivateIndicator(
     @Param('org') org: string,
     @Param('id') id: string,
     @Query('confirm') confirm?: string,
   ) {
     const user = await this.requestContext.getCurrentUser();
-    await this.toolService.deleteIndicator(
+    await this.toolService.deactivateIndicator(
       org,
       id,
       confirm === 'true',

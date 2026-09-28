@@ -485,7 +485,14 @@ export abstract class EvaluationToolService {
     return updated;
   }
 
-  async deleteIndicator(
+  /**
+   * "Eliminar" un KPI lo desactiva, no lo borra. Antes se marcaba
+   * `deletedAt` y el KPI desaparecía de todas partes —incluida la pantalla
+   * de KPI aplicables—, así que no había forma de volver a encenderlo ni de
+   * decidir por organización si aplica. Desactivado deja de contar para las
+   * evaluaciones nuevas pero sigue a la vista.
+   */
+  async deactivateIndicator(
     organisation: string,
     indicatorId: string,
     confirm: boolean,
@@ -512,14 +519,14 @@ export abstract class EvaluationToolService {
     if (!target) {
       return;
     }
-    await this.templates.softDeleteIndicator(target.id);
+    await this.templates.deactivateIndicator(target.id);
     await this.recordStructureChange(
       organisation,
       'indicator',
-      'delete',
+      'update',
       { ...target, templateId: section.templateId },
-      { code: target.code, name: target.name },
-      {},
+      { code: target.code, name: target.name, active: true },
+      { code: target.code, name: target.name, active: false },
       actorId,
     );
   }

@@ -263,10 +263,10 @@ export class PrismaTemplateRepository implements TemplateRepository {
     });
   }
 
-  async softDeleteIndicator(indicatorId: string) {
+  async deactivateIndicator(indicatorId: string) {
     await this.prisma.assessmentIndicator.update({
       where: { id: indicatorId },
-      data: { deletedAt: new Date() },
+      data: { active: false },
     });
   }
 }
