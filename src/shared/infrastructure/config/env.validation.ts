@@ -28,10 +28,12 @@ class EnvironmentVariables {
   @IsString()
   JWT_SECRET: string;
 
-  // Token de acceso corto: la sesión se mantiene con el refresh token rotatorio.
+  // Jornada completa: el token de acceso vive en memoria del navegador, así
+  // que al recargar se renueva con el refresh token rotatorio. Con 15 min la
+  // renovación era constante y cualquier fallo se notaba enseguida.
   @IsOptional()
   @IsString()
-  JWT_EXPIRES_IN = '15m';
+  JWT_EXPIRES_IN = '24h';
 
   @IsOptional()
   @Transform(({ value }) => Number(value))
