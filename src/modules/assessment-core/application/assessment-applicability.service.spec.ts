@@ -20,6 +20,8 @@ function createPrismaMock() {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
     },
+    assessmentSection: { findMany: jest.fn().mockResolvedValue([]) },
+    assessmentIndicator: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(),
   } as AnyRecord;
 }
@@ -114,35 +116,105 @@ describe('AssessmentApplicabilityService', () => {
     });
   });
 
-  describe('resolveExcludedIndicatorIds', () => {
-    it('expands section exclusions into their indicator ids and merges with direct indicator exclusions', async () => {
-      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([
+  // Las exclusiones se guardan por id, pero cada versión de plantilla tiene
+  // ids nuevos: se resuelven por código (KPI) y por número (sección) para que
+  // sigan valiendo en las evaluaciones que corren sobre versiones anteriores.
+  describe('resolución entre versiones de plantilla', () => {
+    const scope = { organisation: 'mh', tool: 'ORGANIZATIONAL' };
+
+    it('expande un KPI excluido a su equivalente en las demás versiones', async () => {
+      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([]);
+      prisma.assessmentProfileIndicatorExclusion.findMany.mockResolvedValue([
         {
-          section: {
-            indicators: [{ id: 'ind-1' }, { id: 'ind-2' }],
-          },
+          profileId: 'profile-1',
+          indicator: { code: 'KPI 1.1', section: { template: scope } },
         },
       ]);
-      prisma.assessmentProfileIndicatorExclusion.findMany.mockResolvedValue([
-        { indicatorId: 'ind-3' },
+      prisma.assessmentIndicator.findMany.mockResolvedValue([
+        { id: 'v1-ind', code: 'KPI 1.1', section: { template: scope } },
+        { id: 'v2-ind', code: 'KPI 1.1', section: { template: scope } },
       ]);
 
       const result = await service.resolveExcludedIndicatorIds('profile-1');
 
-      expect(result).toEqual(new Set(['ind-1', 'ind-2', 'ind-3']));
+      expect(result).toEqual(new Set(['v1-ind', 'v2-ind']));
     });
-  });
 
-  describe('resolveExcludedSectionIds', () => {
-    it('returns a set of excluded section ids', async () => {
-      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([
-        { sectionId: 'sec-1' },
-        { sectionId: 'sec-2' },
+    it('no se pasa a otra herramienta con el mismo código de KPI', async () => {
+      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([]);
+      prisma.assessmentProfileIndicatorExclusion.findMany.mockResolvedValue([
+        {
+          profileId: 'profile-1',
+          indicator: { code: 'KPI 1.1', section: { template: scope } },
+        },
+      ]);
+      // La consulta acota por organización y herramienta; Riesgos usa los
+      // mismos códigos y no debe entrar.
+      prisma.assessmentIndicator.findMany.mockResolvedValue([
+        { id: 'org-ind', code: 'KPI 1.1', section: { template: scope } },
+        {
+          id: 'risk-ind',
+          code: 'KPI 1.1',
+          section: { template: { organisation: 'mh', tool: 'RISK' } },
+        },
       ]);
 
-      const result = await service.resolveExcludedSectionIds('profile-1');
+      const result = await service.resolveExcludedIndicatorIds('profile-1');
 
-      expect(result).toEqual(new Set(['sec-1', 'sec-2']));
+      expect(result).toEqual(new Set(['org-ind']));
+      const where = prisma.assessmentIndicator.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        {
+          section: {
+            is: { template: { is: { ...scope, deletedAt: null } } },
+          },
+        },
+      ]);
+    });
+
+    it('excluir una sección arrastra sus KPI en todas las versiones', async () => {
+      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([
+        { profileId: 'profile-1', section: { number: 2, template: scope } },
+      ]);
+      prisma.assessmentProfileIndicatorExclusion.findMany.mockResolvedValue([]);
+      prisma.assessmentSection.findMany.mockResolvedValue([
+        {
+          id: 'v1-sec',
+          number: 2,
+          template: scope,
+          indicators: [{ id: 'v1-a' }, { id: 'v1-b' }],
+        },
+        {
+          id: 'v2-sec',
+          number: 2,
+          template: scope,
+          indicators: [{ id: 'v2-a' }],
+        },
+        {
+          id: 'otra-sec',
+          number: 3,
+          template: scope,
+          indicators: [{ id: 'no' }],
+        },
+      ]);
+
+      expect(await service.resolveExcludedSectionIds('profile-1')).toEqual(
+        new Set(['v1-sec', 'v2-sec']),
+      );
+      expect(await service.resolveExcludedIndicatorIds('profile-1')).toEqual(
+        new Set(['v1-a', 'v1-b', 'v2-a']),
+      );
+    });
+
+    it('sin exclusiones guardadas no consulta plantillas', async () => {
+      prisma.assessmentProfileSectionExclusion.findMany.mockResolvedValue([]);
+      prisma.assessmentProfileIndicatorExclusion.findMany.mockResolvedValue([]);
+
+      expect(await service.resolveExcludedIndicatorIds('profile-1')).toEqual(
+        new Set(),
+      );
+      expect(prisma.assessmentIndicator.findMany).not.toHaveBeenCalled();
+      expect(prisma.assessmentSection.findMany).not.toHaveBeenCalled();
     });
   });
 });

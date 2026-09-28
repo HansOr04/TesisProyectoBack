@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
+import { AssessmentToolCode } from '../domain/assessment.constants';
 import { SetAssessmentProfileApplicabilityDto } from '../presentation/dto';
 import { AssessmentAuditService } from './assessment-audit.service';
 
@@ -109,86 +110,196 @@ export class AssessmentApplicabilityService {
     };
   }
 
-  // Usado por los servicios de scoring de cada herramienta: expande la
-  // exclusión por sección (todos sus indicadores) + la exclusión directa por
-  // indicador en un único Set de indicatorId no aplicables para el perfil.
-  async resolveExcludedIndicatorIds(profileId: string): Promise<Set<string>> {
-    const [sectionExclusions, indicatorExclusions] = await Promise.all([
-      this.prisma.assessmentProfileSectionExclusion.findMany({
-        where: { profileId },
-        select: {
-          section: { select: { indicators: { select: { id: true } } } },
-        },
-      }),
-      this.prisma.assessmentProfileIndicatorExclusion.findMany({
-        where: { profileId },
-        select: { indicatorId: true },
-      }),
-    ]);
-
-    const excluded = new Set<string>();
-    for (const { section } of sectionExclusions) {
-      for (const indicator of section.indicators) {
-        excluded.add(indicator.id);
-      }
-    }
-    for (const { indicatorId } of indicatorExclusions) {
-      excluded.add(indicatorId);
-    }
-    return excluded;
-  }
-
-  async resolveExcludedSectionIds(profileId: string): Promise<Set<string>> {
-    const sectionExclusions =
-      await this.prisma.assessmentProfileSectionExclusion.findMany({
-        where: { profileId },
-        select: { sectionId: true },
-      });
-    return new Set(sectionExclusions.map((e) => e.sectionId));
-  }
-
-  // Versiones por lote (evitan N+1 en paneles): { profileId → Set<indicatorId> }.
-  async resolveExcludedIndicatorIdsForProfiles(
+  /**
+   * Las exclusiones se guardan por id de sección/indicador, pero cada versión
+   * de plantilla crea filas nuevas con ids nuevos. Sin expandir, marcar "no
+   * aplica" sobre la plantilla activa no tendría efecto en una evaluación que
+   * corre sobre una versión anterior — que es justo lo que pasaba en
+   * producción: TSAPAU evaluaba con la v1 y el diálogo editaba la v2.
+   *
+   * Lo que identifica de verdad a un KPI entre versiones es su código, y a
+   * una sección su número. Se expande por ahí, acotado siempre a la misma
+   * organización y herramienta: desde que los códigos son "KPI X.Y" en las
+   * tres herramientas, sin acotar por herramienta excluir "KPI 1.1" en
+   * Organizativa también lo excluiría en Capacidades y en Riesgos.
+   */
+  private async expandExclusions(
     profileIds: string[],
-  ): Promise<Map<string, Set<string>>> {
-    const result = new Map<string, Set<string>>(
-      profileIds.map((id) => [id, new Set<string>()]),
+  ): Promise<
+    Map<string, { sectionIds: Set<string>; indicatorIds: Set<string> }>
+  > {
+    const result = new Map(
+      profileIds.map((id) => [
+        id,
+        { sectionIds: new Set<string>(), indicatorIds: new Set<string>() },
+      ]),
     );
     if (profileIds.length === 0) return result;
-    const [sectionExclusions, indicatorExclusions] = await Promise.all([
+
+    const templateOf = {
+      select: { organisation: true, tool: true },
+    } as const;
+    const [sectionRows, indicatorRows] = await Promise.all([
       this.prisma.assessmentProfileSectionExclusion.findMany({
         where: { profileId: { in: profileIds } },
         select: {
           profileId: true,
-          section: { select: { indicators: { select: { id: true } } } },
+          section: {
+            select: { number: true, template: templateOf },
+          },
         },
       }),
       this.prisma.assessmentProfileIndicatorExclusion.findMany({
         where: { profileId: { in: profileIds } },
-        select: { profileId: true, indicatorId: true },
+        select: {
+          profileId: true,
+          indicator: {
+            select: {
+              code: true,
+              section: { select: { template: templateOf } },
+            },
+          },
+        },
       }),
     ]);
-    for (const e of sectionExclusions) {
-      const set = result.get(e.profileId);
-      for (const i of e.section.indicators) set?.add(i.id);
+    if (sectionRows.length === 0 && indicatorRows.length === 0) return result;
+
+    const key = (organisation: string, tool: string) =>
+      `${organisation}|${tool}`;
+    const numbersByScope = new Map<string, Set<number>>();
+    const codesByScope = new Map<string, Set<string>>();
+    const add = <T>(map: Map<string, Set<T>>, scope: string, value: T) => {
+      const set = map.get(scope) ?? new Set<T>();
+      set.add(value);
+      map.set(scope, set);
+    };
+    for (const row of sectionRows) {
+      const { organisation, tool } = row.section.template;
+      add(numbersByScope, key(organisation, tool), row.section.number);
     }
-    for (const e of indicatorExclusions)
-      result.get(e.profileId)?.add(e.indicatorId);
+    for (const row of indicatorRows) {
+      const { organisation, tool } = row.indicator.section.template;
+      add(codesByScope, key(organisation, tool), row.indicator.code);
+    }
+
+    const scopeFilter = (map: Map<string, Set<unknown>>) =>
+      [...map.keys()].map((scope) => {
+        const [organisation = '', tool = ''] = scope.split('|');
+        return {
+          organisation,
+          tool: tool as AssessmentToolCode,
+          deletedAt: null,
+        };
+      });
+
+    // Todas las secciones/indicadores equivalentes, en cualquier versión.
+    const [sections, indicators] = await Promise.all([
+      numbersByScope.size === 0
+        ? []
+        : this.prisma.assessmentSection.findMany({
+            where: {
+              deletedAt: null,
+              OR: scopeFilter(numbersByScope).map((scope) => ({
+                template: { is: scope },
+              })),
+            },
+            select: {
+              id: true,
+              number: true,
+              template: templateOf,
+              indicators: { where: { deletedAt: null }, select: { id: true } },
+            },
+          }),
+      codesByScope.size === 0
+        ? []
+        : this.prisma.assessmentIndicator.findMany({
+            where: {
+              deletedAt: null,
+              OR: scopeFilter(codesByScope).map((scope) => ({
+                section: { is: { template: { is: scope } } },
+              })),
+            },
+            select: {
+              id: true,
+              code: true,
+              section: { select: { template: templateOf } },
+            },
+          }),
+    ]);
+
+    const sectionsByScopeNumber = new Map<string, typeof sections>();
+    for (const section of sections) {
+      const k = `${key(section.template.organisation, section.template.tool)}#${section.number}`;
+      sectionsByScopeNumber.set(k, [
+        ...(sectionsByScopeNumber.get(k) ?? []),
+        section,
+      ]);
+    }
+    const indicatorsByScopeCode = new Map<string, string[]>();
+    for (const indicator of indicators) {
+      const { organisation, tool } = indicator.section.template;
+      const k = `${key(organisation, tool)}#${indicator.code}`;
+      indicatorsByScopeCode.set(k, [
+        ...(indicatorsByScopeCode.get(k) ?? []),
+        indicator.id,
+      ]);
+    }
+
+    for (const row of sectionRows) {
+      const target = result.get(row.profileId);
+      if (!target) continue;
+      const { organisation, tool } = row.section.template;
+      for (const section of sectionsByScopeNumber.get(
+        `${key(organisation, tool)}#${row.section.number}`,
+      ) ?? []) {
+        target.sectionIds.add(section.id);
+        for (const indicator of section.indicators) {
+          target.indicatorIds.add(indicator.id);
+        }
+      }
+    }
+    for (const row of indicatorRows) {
+      const target = result.get(row.profileId);
+      if (!target) continue;
+      const { organisation, tool } = row.indicator.section.template;
+      for (const id of indicatorsByScopeCode.get(
+        `${key(organisation, tool)}#${row.indicator.code}`,
+      ) ?? []) {
+        target.indicatorIds.add(id);
+      }
+    }
     return result;
+  }
+
+  // Usado por los servicios de scoring de cada herramienta: expande la
+  // exclusión por sección (todos sus indicadores) + la exclusión directa por
+  // indicador en un único Set de indicatorId no aplicables para el perfil.
+  async resolveExcludedIndicatorIds(profileId: string): Promise<Set<string>> {
+    const expanded = await this.expandExclusions([profileId]);
+    return expanded.get(profileId)?.indicatorIds ?? new Set<string>();
+  }
+
+  async resolveExcludedSectionIds(profileId: string): Promise<Set<string>> {
+    const expanded = await this.expandExclusions([profileId]);
+    return expanded.get(profileId)?.sectionIds ?? new Set<string>();
+  }
+
+  // Versiones por lote (evitan N+1 en paneles): { profileId → Set<id> }.
+  async resolveExcludedIndicatorIdsForProfiles(
+    profileIds: string[],
+  ): Promise<Map<string, Set<string>>> {
+    const expanded = await this.expandExclusions(profileIds);
+    return new Map(
+      [...expanded.entries()].map(([id, sets]) => [id, sets.indicatorIds]),
+    );
   }
 
   async resolveExcludedSectionIdsForProfiles(
     profileIds: string[],
   ): Promise<Map<string, Set<string>>> {
-    const result = new Map<string, Set<string>>(
-      profileIds.map((id) => [id, new Set<string>()]),
+    const expanded = await this.expandExclusions(profileIds);
+    return new Map(
+      [...expanded.entries()].map(([id, sets]) => [id, sets.sectionIds]),
     );
-    if (profileIds.length === 0) return result;
-    const rows = await this.prisma.assessmentProfileSectionExclusion.findMany({
-      where: { profileId: { in: profileIds } },
-      select: { profileId: true, sectionId: true },
-    });
-    for (const r of rows) result.get(r.profileId)?.add(r.sectionId);
-    return result;
   }
 }
