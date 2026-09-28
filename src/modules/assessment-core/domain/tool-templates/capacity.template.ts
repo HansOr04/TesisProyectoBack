@@ -1,6 +1,6 @@
 import { AssessmentSeedTemplate } from './types';
 
-const CODE_PREFIX = 'NA';
+const CODE_PREFIX = 'KPI';
 
 // KPI reales de la Herramienta de Capacidades (Análisis de Capacidades), transcritos del Excel
 // original de la herramienta (nombre, cálculo del indicador y peso exactos, tal como los pasó el
@@ -371,7 +371,7 @@ export const CAPACITY_TOOL_TEMPLATE: AssessmentSeedTemplate = {
     name: a.name,
     weight: 1,
     indicators: a.indicators.map((ind, idx) => ({
-      code: `${CODE_PREFIX}-${a.number}.${idx + 1}`,
+      code: `${CODE_PREFIX} ${a.number}.${idx + 1}`,
       name: ind.name,
       description: ind.description,
       helpText: ind.helpText,

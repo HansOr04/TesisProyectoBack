@@ -155,7 +155,7 @@ describe('Assessment profiles (e2e)', () => {
       certifications: 'Orgánico',
       mainMarkets: 'UE',
       contactEmail: 'contacto@ejemplo.org',
-      contactPhone: '+593999999999',
+      contactPhone: '+593 999999999',
     };
     const updated = await request(app.getHttpServer())
       .patch(`/${ORG}/assessments/profiles/${created.body.id}`)

@@ -471,9 +471,14 @@ model AssessmentResponse {
 
   score       Int // 1..10 entero — validado también en DTO
   observation String // obligatoria (RF-03/04/05)
-  isCritical  Boolean  @default(false) // score <= 5 ⇒ coloreado automático
-  scoredBy    String // trazabilidad de autoría
-  scoredAt    DateTime @default(now())
+  // score <= 5 ⇒ crítico automático; manualCritical ⇒ el evaluador lo marca
+  // "requiere atención" a mano aunque el score sea alto. isCritical = OR de
+  // ambos (se recalcula en cada guardado, es la fuente de verdad para listar
+  // KPI críticos en el plan de acción).
+  isCritical      Boolean  @default(false)
+  manualCritical  Boolean  @default(false)
+  scoredBy        String // trazabilidad de autoría
+  scoredAt        DateTime @default(now())
 
   @@unique([evaluationId, indicatorId])
   @@index([evaluationId])

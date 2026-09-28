@@ -78,6 +78,7 @@ export interface ResponseRecord {
   score: number;
   observation: string;
   isCritical: boolean;
+  manualCritical: boolean;
   scoredBy: string;
   scoredAt: Date;
   indicator: IndicatorRecord;
