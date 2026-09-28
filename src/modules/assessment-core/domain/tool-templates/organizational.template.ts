@@ -1,6 +1,6 @@
 import { AssessmentSeedTemplate, AssessmentSeedIndicator } from './types';
 
-const CODE_PREFIX = 'AZ';
+const CODE_PREFIX = 'KPI';
 
 // KPI reales de la Herramienta Organizativa (Diagnóstico Asociativo), transcritos del Excel original
 // de la herramienta (HERRAMIENTA ORGANIZATIONAL DIAGNOSTICO ASOCIATIVO_V3_2025.xlsm, hoja "DATA 6 DIM"):
@@ -741,7 +741,7 @@ function buildDimensionIndicators(
   items: IndicatorSeed[],
 ): AssessmentSeedIndicator[] {
   return items.map((item, i) => ({
-    code: `${CODE_PREFIX}-${sectionNumber}.${i + 1}`,
+    code: `${CODE_PREFIX} ${sectionNumber}.${i + 1}`,
     name: item.name,
     description: item.description,
     helpText: item.helpText,

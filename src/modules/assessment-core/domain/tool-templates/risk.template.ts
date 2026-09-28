@@ -4,7 +4,7 @@ import {
   AssessmentSeedIndicator,
 } from './types';
 
-const CODE_PREFIX = 'VE';
+const CODE_PREFIX = 'KPI';
 
 // KPI reales de la Herramienta de Riesgos (Gestión de Riesgos), transcritos del Excel original
 // de la herramienta (HERRAMIENTA GESTION DE RIESGOS_V3_2025.xlsm, hoja "DATA UE LDD (2)"):
@@ -531,7 +531,7 @@ function buildPrincipleIndicators(
   items: IndicatorSeed[],
 ): AssessmentSeedIndicator[] {
   return items.map((item, i) => ({
-    code: `${CODE_PREFIX}-${principleNumber}.${i + 1}`,
+    code: `${CODE_PREFIX} ${principleNumber}.${i + 1}`,
     name: item.name,
     description: item.description,
     helpText: item.helpText,
