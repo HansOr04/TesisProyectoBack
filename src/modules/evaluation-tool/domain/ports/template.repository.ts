@@ -81,5 +81,10 @@ export interface TemplateRepository {
     indicatorId: string,
     input: IndicatorInput,
   ): Promise<IndicatorRecord>;
-  softDeleteIndicator(indicatorId: string): Promise<void>;
+  /**
+   * Un KPI nunca se borra: se desactiva. Deja de contar para las
+   * evaluaciones pero sigue apareciendo en la estructura y en la pantalla
+   * de KPI aplicables, para poder volver a encenderlo.
+   */
+  deactivateIndicator(indicatorId: string): Promise<void>;
 }
