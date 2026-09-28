@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MaxLength,
@@ -14,6 +15,7 @@ import {
   ASSESSMENT_PROFILE_TYPES,
   AssessmentAssociationLevel,
   AssessmentProfileType,
+  CONTACT_PHONE_PATTERN,
 } from './create-profile.dto';
 
 export class UpdateAssessmentProfileDto {
@@ -93,6 +95,10 @@ export class UpdateAssessmentProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  @Matches(CONTACT_PHONE_PATTERN, {
+    message:
+      'contactPhone must be in the format "+<dial code> <9 digits>" (exactly 9 digits after the country prefix)',
+  })
   contactPhone?: string;
 
   // `null` limpia explícitamente el evaluador asignado (a diferencia de
