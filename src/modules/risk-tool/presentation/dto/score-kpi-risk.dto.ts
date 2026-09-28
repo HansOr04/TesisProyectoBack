@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -42,6 +43,12 @@ export class KpiResponseRiskDto {
   @IsString()
   @MaxLength(200)
   riskType?: string;
+
+  // El evaluador puede marcar el KPI como "requiere atención" a mano, aunque
+  // el score sea alto.
+  @IsOptional()
+  @IsBoolean()
+  manualCritical?: boolean;
 }
 
 export class ScoreKpiRiskDto {

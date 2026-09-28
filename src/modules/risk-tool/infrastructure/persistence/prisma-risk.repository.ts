@@ -79,7 +79,9 @@ export class PrismaRiskRepository implements RiskRepository {
           update: {
             score: response.score,
             observation: response.observation,
-            isCritical: response.score <= criticalThreshold,
+            isCritical:
+              response.score <= criticalThreshold ||
+              Boolean(response.manualCritical),
             scoredBy,
             scoredAt: new Date(),
           },
@@ -88,7 +90,9 @@ export class PrismaRiskRepository implements RiskRepository {
             indicatorId: response.indicatorId,
             score: response.score,
             observation: response.observation,
-            isCritical: response.score <= criticalThreshold,
+            isCritical:
+              response.score <= criticalThreshold ||
+              Boolean(response.manualCritical),
             scoredBy,
           },
         }),

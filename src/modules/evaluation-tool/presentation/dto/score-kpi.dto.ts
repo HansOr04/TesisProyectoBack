@@ -2,8 +2,10 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -28,6 +30,12 @@ export class KpiResponseDto {
   @IsNotEmpty()
   @MaxLength(4000)
   observation: string;
+
+  // El evaluador puede marcar el KPI como "requiere atención" a mano, aunque
+  // el score sea alto (RF-03: no todo lo crítico se refleja en la nota).
+  @IsOptional()
+  @IsBoolean()
+  manualCritical?: boolean;
 }
 
 export class ScoreKpiDto {
