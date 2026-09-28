@@ -14,6 +14,8 @@ export interface ResponseInput {
   indicatorId: string;
   score: number;
   observation: string;
+  /** El evaluador lo marca "requiere atención" a mano, sin importar el score. */
+  manualCritical?: boolean;
 }
 
 export interface ProfileFilter {
