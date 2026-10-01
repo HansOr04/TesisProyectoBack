@@ -23,6 +23,9 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: config.get<string>('CORS_ORIGIN')?.split(',') ?? '*',
     credentials: true,
+    // Sin esto el navegador repite el preflight OPTIONS antes de cada
+    // PUT/POST, un viaje de red extra por guardado. 7200 s es el tope de Chrome.
+    maxAge: 7200,
   });
   app.useGlobalFilters(
     new AllExceptionsFilter(await app.resolve(StructuredLoggerService)),

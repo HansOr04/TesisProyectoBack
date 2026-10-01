@@ -12,5 +12,6 @@ export interface AiProvider {
     userPrompt: string,
     maxOutputTokens: number,
     temperature: number,
+    timeoutMs: number,
   ): Promise<AiCompletionResult>;
 }

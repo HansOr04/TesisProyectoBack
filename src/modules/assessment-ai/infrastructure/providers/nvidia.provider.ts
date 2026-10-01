@@ -21,6 +21,7 @@ export class NvidiaProvider implements AiProvider {
     userPrompt: string,
     maxOutputTokens: number,
     temperature: number,
+    timeoutMs: number,
   ): Promise<AiCompletionResult> {
     const response = await firstValueFrom(
       this.httpService.post<{
@@ -38,6 +39,7 @@ export class NvidiaProvider implements AiProvider {
           temperature,
         },
         {
+          timeout: timeoutMs,
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
