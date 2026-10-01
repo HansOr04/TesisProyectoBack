@@ -242,6 +242,9 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       userPrompt,
       maxOutputTokens,
       0.4,
+      // El export PPTX también lee la BD y arma el archivo dentro de los 30 s
+      // de Heroku; si la IA tarda más, el reporte sale sin insights.
+      15_000,
     );
     this.log('report insights generated', { tokensUsed: result.tokensUsed });
     return parseAiReportInsights(

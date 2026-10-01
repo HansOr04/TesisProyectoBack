@@ -14,6 +14,11 @@ import { createAiProviderFromEnv } from '../infrastructure/ai-provider.factory';
 
 export type { AiCompletionResult } from '../domain/ports/ai-provider.port';
 
+// Heroku corta toda petición HTTP a los 30 s (H12). La llamada al proveedor
+// debe rendirse antes para que el endpoint responda con un error claro (o
+// con su fallback) en vez de quedar colgado hasta que el router lo mate.
+export const DEFAULT_AI_TIMEOUT_MS = 25_000;
+
 // Módulo de IA compartido: un solo punto de selección de proveedor
 // (Gemini/NVIDIA vía AI_PROVIDER), llamada HTTP y circuit breaker,
 // usado por Organizativa/Capacidades/Riesgos en vez de triplicar esta lógica — cada
@@ -48,6 +53,7 @@ export class AssessmentLlmClientService {
     userPrompt: string,
     maxOutputTokens: number,
     temperature: number,
+    timeoutMs: number = DEFAULT_AI_TIMEOUT_MS,
   ): Promise<AiCompletionResult> {
     if (this.circuitBreaker.isOpen(this.providerName)) {
       throw new ServiceUnavailableException(
@@ -60,6 +66,7 @@ export class AssessmentLlmClientService {
         userPrompt,
         maxOutputTokens,
         temperature,
+        timeoutMs,
       );
       this.circuitBreaker.recordSuccess(this.providerName);
       return result;
