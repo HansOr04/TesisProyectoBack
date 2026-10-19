@@ -29,6 +29,7 @@ export const DEFAULT_AI_TIMEOUT_MS = 25_000;
 export class AssessmentLlmClientService {
   private readonly provider: AiProvider;
   private readonly providerName: string;
+  private readonly missingApiKeyVar?: string;
   private readonly circuitBreaker = new LlmCircuitBreaker();
 
   constructor(
@@ -41,6 +42,7 @@ export class AssessmentLlmClientService {
     this.provider = provider;
     this.providerName = provider.name;
     if (missingApiKey) {
+      this.missingApiKeyVar = apiKeyEnvVar;
       this.logger?.warn(
         `${apiKeyEnvVar} is not set — Assessment AI features will fail until configured`,
       );
@@ -55,6 +57,12 @@ export class AssessmentLlmClientService {
     temperature: number,
     timeoutMs: number = DEFAULT_AI_TIMEOUT_MS,
   ): Promise<AiCompletionResult> {
+    // Sin credencial no tiene sentido salir a la red: se responde 503 de inmediato.
+    if (this.missingApiKeyVar) {
+      throw new ServiceUnavailableException(
+        `AI provider (${this.providerName}) is not configured: ${this.missingApiKeyVar} is not set.`,
+      );
+    }
     if (this.circuitBreaker.isOpen(this.providerName)) {
       throw new ServiceUnavailableException(
         `AI provider (${this.providerName}) temporarily disabled after repeated failures. Try again in a few minutes.`,
