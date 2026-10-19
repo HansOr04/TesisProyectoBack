@@ -1,20 +1,33 @@
 import { Injectable } from '@nestjs/common';
-import * as XLSX from 'xlsx';
 import {
-  createExcelWorksheetFromJson,
-  writeExcelBuffer,
+  buildFormattedWorkbook,
+  ExcelColumn,
 } from '../../../shared/infrastructure/reports/excel-cell.util';
 import {
   AssessmentDashboardRow,
   AssessmentDashboardToolSummary,
 } from '../application/assessment-dashboard.service';
 
-function cell(summary: AssessmentDashboardToolSummary | null) {
-  if (!summary) return { estado: '—', puntaje: '—', alertas: 0 };
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Borrador',
+  IN_PROGRESS: 'En progreso',
+  COMPLETED: 'Completada',
+  ARCHIVED: 'Archivada',
+};
+
+const TOOLS = [
+  ['organizational', 'Organizativa'],
+  ['capacity', 'Capacidades'],
+  ['risk', 'Riesgos'],
+] as const;
+
+function cell(prefix: string, summary: AssessmentDashboardToolSummary | null) {
   return {
-    estado: summary.status,
-    puntaje: summary.globalScore ?? '—',
-    alertas: summary.criticalAlertCount,
+    [`${prefix}Status`]: summary
+      ? (STATUS_LABEL[summary.status] ?? summary.status)
+      : 'Sin evaluar',
+    [`${prefix}Score`]: summary?.globalScore ?? '—',
+    [`${prefix}Alerts`]: summary ? summary.criticalAlertCount : '—',
   };
 }
 
@@ -24,38 +37,68 @@ function cell(summary: AssessmentDashboardToolSummary | null) {
 @Injectable()
 export class AssessmentDashboardExportService {
   async buildWorkbook(rows: AssessmentDashboardRow[]) {
-    const sheetRows = rows.map((row) => {
-      const organizational = cell(row.organizational);
-      const capacity = cell(row.capacity);
-      const risk = cell(row.risk);
-      return {
-        organizacion: row.profile.name,
-        pais: row.profile.country,
+    const sheetRows = [...rows]
+      .sort((a, b) => a.profile.name.localeCompare(b.profile.name, 'es'))
+      .map((row) => ({
+        organization: row.profile.name,
+        country: row.profile.country,
         region: row.profile.region ?? '',
-        producto: row.profile.mainProduct,
-        organizationalEstado: organizational.estado,
-        organizationalPuntaje: organizational.puntaje,
-        capacityEstado: capacity.estado,
-        capacityPuntaje: capacity.puntaje,
-        riskEstado: risk.estado,
-        riskPuntaje: risk.puntaje,
-        alertasCriticas: row.criticalAlertCount,
-      };
-    });
+        product: row.profile.mainProduct,
+        ...cell('organizational', row.organizational),
+        ...cell('capacity', row.capacity),
+        ...cell('risk', row.risk),
+        alerts: row.criticalAlertCount,
+      }));
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      workbook,
-      createExcelWorksheetFromJson(sheetRows),
-      'Panel Consolidado',
-    );
-    const buffer = await writeExcelBuffer(workbook);
+    const toolColumns: ExcelColumn[] = TOOLS.flatMap(([key, label]) => [
+      { header: `${label}: estado`, key: `${key}Status`, width: 14 },
+      {
+        header: `${label}: puntaje`,
+        key: `${key}Score`,
+        width: 13,
+        kind: 'score',
+      },
+      {
+        header: `${label}: alertas`,
+        key: `${key}Alerts`,
+        width: 12,
+        kind: 'number',
+      },
+    ]);
+
+    const date = new Date().toLocaleDateString('es-EC', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+    const data = await buildFormattedWorkbook([
+      {
+        name: 'Panel consolidado',
+        title: 'Panel consolidado de evaluaciones',
+        subtitle: `${sheetRows.length} organizaciones · última evaluación de cada herramienta · generado el ${date}`,
+        columns: [
+          { header: 'Organización', key: 'organization', width: 38 },
+          { header: 'País', key: 'country', width: 14 },
+          { header: 'Región', key: 'region', width: 18 },
+          { header: 'Producto principal', key: 'product', width: 18 },
+          ...toolColumns,
+          {
+            header: 'Alertas críticas (total)',
+            key: 'alerts',
+            width: 14,
+            kind: 'number',
+          },
+        ],
+        rows: sheetRows,
+        emptyText: 'No hay organizaciones que coincidan con los filtros.',
+      },
+    ]);
 
     return {
       filename: `panel-consolidado-assessment-${Date.now()}.xlsx`,
       contentType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      data: buffer,
+      data,
     };
   }
 }

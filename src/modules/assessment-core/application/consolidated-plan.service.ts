@@ -138,8 +138,10 @@ export class ConsolidatedPlanService {
   ): Promise<
     | {
         title: string;
+        nameHeader: string;
         measures: Array<{
           name: string;
+          detail: string;
           startDate: Date;
           endDate: Date;
           status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
@@ -166,17 +168,14 @@ export class ConsolidatedPlanService {
       title: byOrganisation
         ? 'Plan de Acción Consolidado — las tres herramientas'
         : 'Plan de Acción Consolidado — todo el proyecto',
+      nameHeader: byOrganisation ? 'Herramienta' : 'Organización',
       measures: [...groups.entries()]
         .map(([group, list]) => {
           const done = list.filter((m) => m.status === 'DONE').length;
           const started = list.filter((m) => m.status !== 'PENDING').length;
-          // La etiqueta del Gantt se recorta a 42 caracteres: se acorta el
-          // nombre del grupo y no el contador, que es el dato que interesa.
-          const count = `${list.length} ${list.length === 1 ? 'medida' : 'medidas'}`;
-          // 42 es el corte del Gantt; menos los 3 del separador " · ".
-          const room = Math.max(8, 39 - count.length);
           return {
-            name: `${group.length > room ? `${group.slice(0, room - 1).trimEnd()}…` : group} · ${count}`,
+            name: group,
+            detail: `${list.length} ${list.length === 1 ? 'medida' : 'medidas'}`,
             startDate: new Date(
               Math.min(...list.map((m) => m.startDate.getTime())),
             ),
