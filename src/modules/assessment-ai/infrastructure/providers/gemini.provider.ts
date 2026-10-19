@@ -19,6 +19,7 @@ export class GeminiProvider implements AiProvider {
     userPrompt: string,
     maxOutputTokens: number,
     temperature: number,
+    timeoutMs: number,
   ): Promise<AiCompletionResult> {
     const response = await firstValueFrom(
       this.httpService.post<{
@@ -34,6 +35,7 @@ export class GeminiProvider implements AiProvider {
           generationConfig: { maxOutputTokens, temperature },
         },
         {
+          timeout: timeoutMs,
           headers: {
             'Content-Type': 'application/json',
             'X-goog-api-key': this.apiKey,
