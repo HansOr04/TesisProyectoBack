@@ -58,6 +58,7 @@
     "class-validator": "^0.14.1",
     "compression": "^1.7.5",
     "cookie-parser": "^1.4.7",
+    "exceljs": "^4.4.0",
     "google-auth-library": "^9.15.0",
     "helmet": "^8.0.0",
     "pptxgenjs": "^4.0.1",

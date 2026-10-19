@@ -137,7 +137,8 @@ describe('ConsolidatedPlanService', () => {
     );
     // Tres medidas: 100 + 50 + 40 → 63 % de avance promedio.
     expect(cacaoteros).toMatchObject({
-      name: 'Cacaoteros · 3 medidas',
+      name: 'Cacaoteros',
+      detail: '3 medidas',
       startDate: d('2026-01-15'),
       endDate: d('2026-08-01'),
       status: 'IN_PROGRESS',
@@ -180,7 +181,7 @@ describe('ConsolidatedPlanService', () => {
     });
   });
 
-  it('recorta el nombre del grupo, nunca el contador de medidas', async () => {
+  it('conserva el nombre completo del grupo y separa el contador de medidas', async () => {
     indicatorRows = indicatorRows.map((row) => ({
       ...row,
       evaluation: {
@@ -194,9 +195,12 @@ describe('ConsolidatedPlanService', () => {
 
     const gantt = await service.gantt('demo', 'project', 'p1');
     const [bar] = gantt?.measures ?? [];
-    // El Gantt recorta la etiqueta en 42 caracteres: debe caber entera.
-    expect(bar.name.length).toBeLessThanOrEqual(42);
-    expect(bar.name.endsWith('· 3 medidas')).toBe(true);
-    expect(bar.name).toContain('…');
+    // El Gantt del reporte tiene una columna ancha con texto ajustado: el
+    // nombre ya no se recorta y el contador va en su propia línea.
+    expect(bar.name).toBe(
+      'Asociación de Productores Agroecológicos del Norte Andino',
+    );
+    expect(bar.detail).toBe('3 medidas');
+    expect(gantt?.nameHeader).toBe('Organización');
   });
 });

@@ -1,5 +1,6 @@
 import { withExportSlot } from './export-limiter';
 import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 
 /** Excel hard limit per cell (inclusive). */
 export const EXCEL_CELL_MAX_LENGTH = 32767;
@@ -79,4 +80,181 @@ export function writeExcelBuffer(workbook: XLSX.WorkBook): Promise<Buffer> {
     async () =>
       XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as Buffer,
   );
+}
+
+// ── Hojas con formato (ExcelJS) ──────────────────────────────────────────
+// SheetJS Community no escribe estilos; para los reportes que se entregan a
+// las organizaciones se usa ExcelJS: título, encabezado con color, anchos de
+// columna, texto ajustado, filtros y la fila de encabezado inmovilizada.
+
+export type ExcelColumnKind = 'text' | 'number' | 'score' | 'percent' | 'date';
+
+export interface ExcelColumn {
+  header: string;
+  key: string;
+  /** Ancho en caracteres. */
+  width: number;
+  kind?: ExcelColumnKind;
+}
+
+export interface ExcelSheetSpec {
+  name: string;
+  title: string;
+  /** Línea de contexto bajo el título (organización, fecha…). */
+  subtitle?: string;
+  columns: ExcelColumn[];
+  rows: Record<string, unknown>[];
+  emptyText?: string;
+}
+
+const EXCEL_BRAND = 'FF2F6B3B';
+const EXCEL_BAND = 'FFF4F7F5';
+const EXCEL_RULE = 'FFD5DCD7';
+
+function scoreFontColor(score: number): string {
+  if (score <= 5) return 'FFC62828';
+  if (score < 7) return 'FFB27C00';
+  return 'FF2E7D32';
+}
+
+/** Nombre de hoja válido para Excel: máx. 31 caracteres y sin : \ / ? * [ ] */
+function safeSheetName(name: string): string {
+  return name.replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
+}
+
+export async function buildFormattedWorkbook(
+  sheets: ExcelSheetSpec[],
+): Promise<Buffer> {
+  return withExportSlot(async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Plataforma de evaluación';
+    workbook.created = new Date();
+
+    for (const spec of sheets) {
+      const sheet = workbook.addWorksheet(safeSheetName(spec.name));
+      const lastCol = spec.columns.length;
+      sheet.columns = spec.columns.map((c) => ({ key: c.key, width: c.width }));
+
+      sheet.mergeCells(1, 1, 1, lastCol);
+      const title = sheet.getCell(1, 1);
+      title.value = spec.title;
+      title.font = {
+        name: 'Arial',
+        size: 14,
+        bold: true,
+        color: { argb: 'FF1E2B24' },
+      };
+      sheet.getRow(1).height = 24;
+      if (spec.subtitle) {
+        sheet.mergeCells(2, 1, 2, lastCol);
+        const sub = sheet.getCell(2, 1);
+        sub.value = spec.subtitle;
+        sub.font = { name: 'Arial', size: 10, color: { argb: 'FF6B7770' } };
+      }
+
+      const headerRowNumber = 4;
+      const header = sheet.getRow(headerRowNumber);
+      spec.columns.forEach((c, i) => {
+        const cell = header.getCell(i + 1);
+        cell.value = c.header;
+        cell.font = {
+          name: 'Arial',
+          size: 10,
+          bold: true,
+          color: { argb: 'FFFFFFFF' },
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: EXCEL_BRAND },
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: c.kind && c.kind !== 'text' ? 'center' : 'left',
+          wrapText: true,
+        };
+      });
+      header.height = 30;
+
+      spec.rows.forEach((data, r) => {
+        const row = sheet.getRow(headerRowNumber + 1 + r);
+        spec.columns.forEach((c, i) => {
+          const cell = row.getCell(i + 1);
+          const raw = data[c.key];
+          const kind = c.kind ?? 'text';
+          if (kind === 'date' && raw instanceof Date && !isNaN(raw.getTime())) {
+            cell.value = raw;
+            cell.numFmt = 'dd/mm/yyyy';
+          } else if (kind === 'percent' && typeof raw === 'number') {
+            cell.value = raw / 100;
+            cell.numFmt = '0%';
+          } else if (
+            (kind === 'number' || kind === 'score') &&
+            typeof raw === 'number'
+          ) {
+            cell.value = raw;
+            if (kind === 'score') cell.numFmt = '0.0';
+          } else {
+            cell.value = sanitizeForExcelCell(raw, c.key);
+          }
+          cell.font = {
+            name: 'Arial',
+            size: 10,
+            bold: kind === 'score' && typeof raw === 'number',
+            color: {
+              argb:
+                kind === 'score' && typeof raw === 'number'
+                  ? scoreFontColor(raw)
+                  : 'FF1E2B24',
+            },
+          };
+          cell.alignment = {
+            vertical: 'top',
+            horizontal: kind === 'text' ? 'left' : 'center',
+            wrapText: kind === 'text',
+          };
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: EXCEL_RULE } },
+          };
+          if (r % 2 === 1) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: EXCEL_BAND },
+            };
+          }
+        });
+      });
+
+      if (spec.rows.length === 0 && spec.emptyText) {
+        const cell = sheet.getCell(headerRowNumber + 1, 1);
+        cell.value = spec.emptyText;
+        cell.font = {
+          name: 'Arial',
+          size: 10,
+          italic: true,
+          color: { argb: 'FF6B7770' },
+        };
+      }
+
+      sheet.views = [{ state: 'frozen', ySplit: headerRowNumber }];
+      sheet.autoFilter = {
+        from: { row: headerRowNumber, column: 1 },
+        to: {
+          row: headerRowNumber + Math.max(spec.rows.length, 1),
+          column: lastCol,
+        },
+      };
+      sheet.pageSetup = {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        printTitlesRow: `${headerRowNumber}:${headerRowNumber}`,
+      };
+    }
+
+    const out = await workbook.xlsx.writeBuffer();
+    return Buffer.from(out as ArrayBuffer);
+  });
 }

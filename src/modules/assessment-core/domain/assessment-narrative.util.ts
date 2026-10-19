@@ -54,7 +54,8 @@ export function buildExecutiveNarrative(
   const memberText =
     profile.memberCount != null ? String(profile.memberCount) : '';
   const activityText = profile.mainActivity ?? '';
-  const marketsText = profile.mainMarkets ?? '';
+  // Sin el punto final, que la oración ya agrega ("EE. UU." quedaba "EE. UU..").
+  const marketsText = (profile.mainMarkets ?? '').replace(/\.+\s*$/, '');
 
   let intro =
     `${profile.name}, inició sus actividades en ${yearText}; actualmente, cuenta con ${memberText} socios; ` +
