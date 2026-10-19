@@ -222,7 +222,7 @@ model ActivityLog {
 
 enum AssessmentTool {
   ORGANIZATIONAL // Diagnóstico de Fortalecimiento Organizativo (73 KPI, 6 dimensiones)
-  CAPACITY // Análisis de Capacidades (65 KPI, 4 áreas estratégicas)
+  CAPACITY // Análisis de Capacidades (30 KPI, 4 áreas estratégicas)
   RISK // Identificación y Gestión de Riesgos (46 KPI, 4 principios)
 }
 
