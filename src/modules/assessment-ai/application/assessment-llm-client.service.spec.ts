@@ -46,6 +46,21 @@ describe('AssessmentLlmClientService provider selection', () => {
     );
   });
 
+  it('answers 503 without calling the provider when its key is missing', async () => {
+    process.env.AI_PROVIDER = 'gemini';
+    delete process.env.GEMINI_API_KEY;
+    const httpService = { post: jest.fn() };
+    const client = new AssessmentLlmClientService(
+      httpService as unknown as HttpService,
+      createLoggerMock() as unknown as StructuredLoggerService,
+    );
+
+    await expect(client.complete('system', 'user', 100, 0.2)).rejects.toThrow(
+      'GEMINI_API_KEY is not set',
+    );
+    expect(httpService.post).not.toHaveBeenCalled();
+  });
+
   it('does not warn when the active provider has its key configured', () => {
     process.env.AI_PROVIDER = 'gemini';
     process.env.GEMINI_API_KEY = 'test-key';
