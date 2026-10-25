@@ -204,3 +204,112 @@ describe('ConsolidatedPlanService', () => {
     expect(gantt?.nameHeader).toBe('Organización');
   });
 });
+
+describe('ConsolidatedPlanService.profilePlan', () => {
+  const evaluation = (id: string, startedAt: string, tool: string) => ({
+    id,
+    startedAt: d(startedAt),
+    template: { tool },
+  });
+
+  function build(
+    indicatorRows: unknown[],
+    mitigationRows: unknown[],
+    indicators: { id: string; code: string; name: string }[],
+  ) {
+    const prisma = {
+      assessmentIndicatorMeasure: {
+        findMany: jest.fn().mockResolvedValue(indicatorRows),
+      },
+      assessmentMitigationMeasure: {
+        findMany: jest.fn().mockResolvedValue(mitigationRows),
+      },
+      assessmentIndicator: {
+        findMany: jest.fn().mockResolvedValue(indicators),
+      },
+    };
+    return {
+      prisma,
+      service: new ConsolidatedPlanService(prisma as unknown as PrismaService),
+    };
+  }
+
+  const kpiMeasure = (id: string, tool: string, code: string) => ({
+    id,
+    name: `Medida ${id}`,
+    responsible: 'Gerente',
+    startDate: d('2026-03-01'),
+    endDate: d('2026-05-01'),
+    status: 'DONE' as const,
+    progressPct: 100,
+    appliedImprovements: 'Manual aprobado en asamblea',
+    verificationLink: 'https://example.com/acta.pdf',
+    indicator: { code, name: `Indicador ${code}` },
+    evaluation: evaluation(`ev-${tool}`, '2026-02-01', tool),
+  });
+
+  it('junta las medidas de las tres herramientas de la organización, en orden de herramienta', async () => {
+    const { service, prisma } = build(
+      [
+        kpiMeasure('c1', 'CAPACITY', 'KPI 2.1'),
+        kpiMeasure('o1', 'ORGANIZATIONAL', 'KPI 1.1'),
+      ],
+      [
+        {
+          id: 'r1',
+          description: 'Regularizar escrituras',
+          responsible: 'Presidente',
+          startWeek: d('2026-04-06'),
+          endDate: d('2026-04-20'),
+          status: 'IN_PROGRESS',
+          progressPct: 40,
+          appliedImprovements: null,
+          verificationLink: null,
+          risk: {
+            indicatorId: 'ind-r',
+            evaluation: evaluation('ev-RISK', '2026-02-01', 'RISK'),
+          },
+        },
+      ],
+      [{ id: 'ind-r', code: 'KPI 1.3', name: 'Tierras protegidas' }],
+    );
+
+    const plan = await service.profilePlan('demo', 'p1');
+
+    expect(plan.map((m) => m.tool)).toEqual([
+      'ORGANIZATIONAL',
+      'CAPACITY',
+      'RISK',
+    ]);
+    // La medida de riesgo toma el KPI del indicador de su riesgo.
+    expect(plan[2]).toMatchObject({
+      id: 'r1',
+      evaluationId: 'ev-RISK',
+      indicatorCode: 'KPI 1.3',
+      indicatorName: 'Tierras protegidas',
+      title: 'Regularizar escrituras',
+      startDate: d('2026-04-06'),
+      status: 'IN_PROGRESS',
+    });
+    // Lo implementado de una medida concluida llega tal cual.
+    expect(plan[0]).toMatchObject({
+      appliedImprovements: 'Manual aprobado en asamblea',
+      verificationLink: 'https://example.com/acta.pdf',
+    });
+    // Solo lee las evaluaciones vigentes de esa organización y proyecto.
+    expect(
+      prisma.assessmentIndicatorMeasure.findMany.mock.calls[0][0].where,
+    ).toEqual({
+      organisation: 'demo',
+      deletedAt: null,
+      evaluation: { deletedAt: null, organisation: 'demo', profileId: 'p1' },
+    });
+  });
+
+  it('no consulta indicadores cuando la organización no tiene medidas de riesgo', async () => {
+    const { service, prisma } = build([], [], []);
+
+    await expect(service.profilePlan('demo', 'p1')).resolves.toEqual([]);
+    expect(prisma.assessmentIndicator.findMany).not.toHaveBeenCalled();
+  });
+});
