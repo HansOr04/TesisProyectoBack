@@ -1,0 +1,80 @@
+# Integración continua del servidor (HU-60): cada pull request y cada push a
+# develop o main pasa por estilo, tipos, pruebas unitarias, pruebas de
+# integración contra un PostgreSQL de prueba y compilación. La protección de
+# ramas exige que este trabajo termine en verde antes de integrar (HU-62).
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Estilo, tipos y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: assessment
+          POSTGRES_PASSWORD: assessment
+          POSTGRES_DB: assessment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assessment"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://assessment:assessment@localhost:5432/assessment?schema=public
+      CORS_ORIGIN: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Secreto de un solo uso para firmar los JWT de las pruebas; no es el
+      # de producción, que vive solo en Heroku.
+      - name: Generar JWT_SECRET de prueba
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Estilo (ESLint)
+        run: npm run lint
+
+      - name: Tipos (TypeScript)
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Pruebas unitarias
+        run: npm test -- --ci
+
+      - name: Migraciones y datos base en la base de prueba
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+
+      - name: Pruebas de integración (PostgreSQL)
+        run: npm run test:e2e -- --ci
+
+      - name: Compilación
+        run: npm run build
