@@ -25,6 +25,24 @@ export interface ConsolidatedMeasure {
   group: string;
 }
 
+/** Una medida del plan de una organización, venga de la herramienta que venga. */
+export interface ProfilePlanMeasure {
+  id: string;
+  tool: 'ORGANIZATIONAL' | 'CAPACITY' | 'RISK';
+  evaluationId: string;
+  evaluationStartedAt: Date;
+  indicatorCode: string;
+  indicatorName: string;
+  title: string;
+  responsible: string;
+  startDate: Date;
+  endDate: Date;
+  status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
+  progressPct: number;
+  appliedImprovements: string | null;
+  verificationLink: string | null;
+}
+
 const TOOL_LABEL: Record<string, string> = {
   ORGANIZATIONAL: 'Organizativa',
   CAPACITY: 'Capacidades',
@@ -117,6 +135,126 @@ export class ConsolidatedPlanService {
         a.startDate.getTime() - b.startDate.getTime() ||
         a.group.localeCompare(b.group) ||
         a.name.localeCompare(b.name),
+    );
+  }
+
+  /**
+   * Plan de acción completo de una organización evaluada: las medidas de las
+   * tres herramientas, de todas sus evaluaciones, con lo necesario para verlas
+   * juntas (KPI de origen, responsable, avance y lo implementado). Solo lee.
+   *
+   * Las medidas de riesgo no guardan el KPI: cuelgan del riesgo, que guarda
+   * el id del indicador, así que los códigos se buscan aparte.
+   */
+  async profilePlan(
+    organisation: string,
+    profileId: string,
+  ): Promise<ProfilePlanMeasure[]> {
+    const evaluation = { deletedAt: null, organisation, profileId };
+    const evaluationFields = {
+      id: true,
+      startedAt: true,
+      template: { select: { tool: true } },
+    } as const;
+
+    const [indicatorMeasures, mitigationMeasures] = await Promise.all([
+      this.prisma.assessmentIndicatorMeasure.findMany({
+        where: { organisation, deletedAt: null, evaluation },
+        select: {
+          id: true,
+          name: true,
+          responsible: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          progressPct: true,
+          appliedImprovements: true,
+          verificationLink: true,
+          indicator: { select: { code: true, name: true } },
+          evaluation: { select: evaluationFields },
+        },
+      }),
+      this.prisma.assessmentMitigationMeasure.findMany({
+        where: { deletedAt: null, risk: { evaluation } },
+        select: {
+          id: true,
+          description: true,
+          responsible: true,
+          startWeek: true,
+          endDate: true,
+          status: true,
+          progressPct: true,
+          appliedImprovements: true,
+          verificationLink: true,
+          risk: {
+            select: {
+              indicatorId: true,
+              evaluation: { select: evaluationFields },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const riskIndicatorIds = [
+      ...new Set(mitigationMeasures.map((m) => m.risk.indicatorId)),
+    ];
+    const riskIndicators =
+      riskIndicatorIds.length === 0
+        ? []
+        : await this.prisma.assessmentIndicator.findMany({
+            where: { id: { in: riskIndicatorIds } },
+            select: { id: true, code: true, name: true },
+          });
+    const indicatorById = new Map(riskIndicators.map((i) => [i.id, i]));
+
+    const rows: ProfilePlanMeasure[] = [
+      ...indicatorMeasures.map((m) => ({
+        id: m.id,
+        tool: m.evaluation.template.tool as ProfilePlanMeasure['tool'],
+        evaluationId: m.evaluation.id,
+        evaluationStartedAt: m.evaluation.startedAt,
+        indicatorCode: m.indicator.code,
+        indicatorName: m.indicator.name,
+        title: m.name,
+        responsible: m.responsible,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        status: m.status,
+        progressPct: m.progressPct,
+        appliedImprovements: m.appliedImprovements,
+        verificationLink: m.verificationLink,
+      })),
+      ...mitigationMeasures.map((m) => {
+        const indicator = indicatorById.get(m.risk.indicatorId);
+        return {
+          id: m.id,
+          tool: 'RISK' as const,
+          evaluationId: m.risk.evaluation.id,
+          evaluationStartedAt: m.risk.evaluation.startedAt,
+          indicatorCode: indicator?.code ?? '',
+          indicatorName: indicator?.name ?? '',
+          title: m.description,
+          responsible: m.responsible,
+          startDate: m.startWeek,
+          endDate: m.endDate,
+          status: m.status,
+          progressPct: m.progressPct,
+          appliedImprovements: m.appliedImprovements,
+          verificationLink: m.verificationLink,
+        };
+      }),
+    ];
+
+    const toolOrder = ['ORGANIZATIONAL', 'CAPACITY', 'RISK'];
+    return rows.sort(
+      (a, b) =>
+        toolOrder.indexOf(a.tool) - toolOrder.indexOf(b.tool) ||
+        b.evaluationStartedAt.getTime() - a.evaluationStartedAt.getTime() ||
+        a.startDate.getTime() - b.startDate.getTime() ||
+        a.indicatorCode.localeCompare(b.indicatorCode, 'es', {
+          numeric: true,
+        }),
     );
   }
 

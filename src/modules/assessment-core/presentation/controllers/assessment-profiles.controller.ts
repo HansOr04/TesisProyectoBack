@@ -22,6 +22,7 @@ import {
   RequireAssessmentPermission,
 } from '../guards/assessment-permission.guard';
 import { AssessmentAccessScopeService } from '../../application/assessment-access-scope.service';
+import { ConsolidatedPlanService } from '../../application/consolidated-plan.service';
 
 @ApiTags('Perfiles de organización')
 @ApiBearerAuth()
@@ -40,6 +41,7 @@ export class AssessmentProfilesController {
     private readonly profilesService: AssessmentProfilesService,
     private readonly requestContext: RequestContextService,
     private readonly accessScope: AssessmentAccessScopeService,
+    private readonly consolidatedPlan: ConsolidatedPlanService,
   ) {}
 
   private async resolveScope(org: string) {
@@ -67,6 +69,20 @@ export class AssessmentProfilesController {
   async getChildren(@Param('org') org: string, @Param('id') id: string) {
     const scope = await this.resolveScope(org);
     return this.profilesService.getAssociationOverview(org, id, scope);
+  }
+
+  // Plan de acción consolidado de la organización: medidas de las tres
+  // herramientas juntas. Pasa por get() para respetar el alcance del
+  // evaluador (solo sus organizaciones asignadas).
+  @Get(':org/assessments/profiles/:id/action-plan')
+  @RequireAssessmentPermission('assessment-core', 'read')
+  async getActionPlan(@Param('org') org: string, @Param('id') id: string) {
+    const scope = await this.resolveScope(org);
+    const profile = await this.profilesService.get(org, id, scope);
+    return {
+      profile: { id: profile.id, name: profile.name },
+      measures: await this.consolidatedPlan.profilePlan(org, profile.id),
+    };
   }
 
   @Post(':org/assessments/profiles')

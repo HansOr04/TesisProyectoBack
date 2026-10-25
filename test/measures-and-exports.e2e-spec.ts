@@ -219,6 +219,40 @@ describe('Measures and report exports (e2e)', () => {
     });
   });
 
+  // HU-57: plan de acción consolidado de una organización, pedido en el
+  // piloto. Corre después de CA-52.1, que deja medidas de la herramienta
+  // organizativa y de riesgos en la organización A.
+  describe('consolidated action plan of one organisation', () => {
+    it('lists the measures of every tool of that organisation and nothing from others', async () => {
+      const res = await auth(
+        http().get(`/${ORG}/assessments/profiles/${profileIds[0]}/action-plan`),
+      ).expect(200);
+
+      expect(res.body.profile).toEqual({ id: profileIds[0], name: nameA });
+      const measures = res.body.measures as Array<{
+        tool: string;
+        evaluationId: string;
+        indicatorCode: string;
+        title: string;
+      }>;
+      const tools = new Set(measures.map((m) => m.tool));
+      expect(tools).toEqual(new Set(['ORGANIZATIONAL', 'RISK']));
+      expect(measures.find((m) => m.tool === 'RISK')?.evaluationId).toBe(
+        riskEvalA.evaluationId,
+      );
+      expect(measures.every((m) => m.indicatorCode.length > 0)).toBe(true);
+      expect(measures.map((m) => m.title)).not.toContain(
+        'Medida de la organización B',
+      );
+    });
+
+    it('answers 404 for an organisation that does not exist in the project', async () => {
+      await auth(
+        http().get(`/${ORG}/assessments/profiles/no-existe/action-plan`),
+      ).expect(404);
+    });
+  });
+
   describe('CA-52.2 report exports', () => {
     const base = `/${ORG}/assessments/organizational`;
 
