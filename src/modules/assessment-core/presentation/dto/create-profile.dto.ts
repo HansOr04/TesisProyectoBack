@@ -6,15 +6,31 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   Max,
   Min,
   MaxLength,
+  ValidateBy,
+  ValidationOptions,
 } from 'class-validator';
+import { isValidContactPhone } from '../../domain/contact-phone';
 
-// Prefijo de país (1-4 dígitos) + exactamente 9 dígitos del número nacional,
-// igual al formato que arma el wizard del frontend (`+<dialCode> <9 dígitos>`).
-export const CONTACT_PHONE_PATTERN = /^\+\d{1,4} \d{9}$/;
+export const CONTACT_PHONE_MESSAGE =
+  'contactPhone must be "+<dial code> <national number>" with the digits of that country (e.g. 9 for Ecuador, 10 for Colombia)';
+
+// Prefijo de país + número nacional con los dígitos de ese país, igual al
+// formato que arma el asistente del frontend (`+<dialCode> <número>`).
+export function IsContactPhone(options?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isContactPhone',
+      validator: {
+        validate: isValidContactPhone,
+        defaultMessage: () => CONTACT_PHONE_MESSAGE,
+      },
+    },
+    options,
+  );
+}
 
 export const ASSESSMENT_PROFILE_TYPES = ['ASSOCIATION', 'COMPANY'] as const;
 export type AssessmentProfileType = (typeof ASSESSMENT_PROFILE_TYPES)[number];
@@ -101,10 +117,7 @@ export class CreateAssessmentProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  @Matches(CONTACT_PHONE_PATTERN, {
-    message:
-      'contactPhone must be in the format "+<dial code> <9 digits>" (exactly 9 digits after the country prefix)',
-  })
+  @IsContactPhone()
   contactPhone?: string;
 
   @IsOptional()
