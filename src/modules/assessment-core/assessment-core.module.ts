@@ -16,6 +16,7 @@ import { AssessmentProfilesController } from './presentation/controllers/assessm
 import { AssessmentRolesController } from './presentation/controllers/assessment-roles.controller';
 import { AssessmentAiThrottlerGuard } from './presentation/guards/assessment-ai-throttler.guard';
 import { AssessmentPermissionGuard } from './presentation/guards/assessment-permission.guard';
+import { AssessmentScopeGuard } from './presentation/guards/assessment-scope.guard';
 
 // Núcleo compartido: perfiles de organización evaluada, aplicabilidad,
 // roles Assessment, dashboard consolidado y auditoría. Los módulos de
@@ -41,6 +42,7 @@ import { AssessmentPermissionGuard } from './presentation/guards/assessment-perm
     AssessmentDashboardExportService,
     AssessmentAuditService,
     AssessmentPermissionGuard,
+    AssessmentScopeGuard,
     AssessmentAiThrottlerGuard,
   ],
   exports: [
@@ -53,6 +55,7 @@ import { AssessmentPermissionGuard } from './presentation/guards/assessment-perm
     AssessmentDashboardService,
     AssessmentAuditService,
     AssessmentPermissionGuard,
+    AssessmentScopeGuard,
     AssessmentAiThrottlerGuard,
   ],
 })

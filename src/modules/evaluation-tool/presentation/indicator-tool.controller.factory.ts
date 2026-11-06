@@ -25,6 +25,10 @@ import {
   AssessmentPermissionGuard,
   RequireAssessmentPermission,
 } from '../../assessment-core/presentation/guards/assessment-permission.guard';
+import {
+  AssessmentScopeGuard,
+  ScopedTo,
+} from '../../assessment-core/presentation/guards/assessment-scope.guard';
 import { AssessmentAccessScopeService } from '../../assessment-core/application/assessment-access-scope.service';
 import { AssessmentAiThrottlerGuard } from '../../assessment-core/presentation/guards/assessment-ai-throttler.guard';
 import { ASSESSMENT_MODULE_CODES } from '../../assessment-core/domain/assessment.constants';
@@ -79,7 +83,7 @@ export function createIndicatorToolController(
   @ApiBearerAuth()
   @Controller()
   @RequireAuthenticated()
-  @UseGuards(AssessmentPermissionGuard)
+  @UseGuards(AssessmentPermissionGuard, AssessmentScopeGuard)
   @UsePipes(
     new ValidationPipe({
       whitelist: true,
@@ -220,6 +224,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('profile', 'profileId', 'body')
     async createEvaluation(
       @Param('org') org: string,
       @Body() dto: CreateAssessmentEvaluationDto,
@@ -234,17 +239,25 @@ export function createIndicatorToolController(
       @Param('org') org: string,
       @Query() query: PaginationQueryDto,
     ) {
-      return this.toolService.listEvaluations(org, query);
+      const user = await this.requestContext.requireCurrentUser();
+      const scope = await this.accessScope.resolveProfileScope(
+        org,
+        user.id,
+        this.requestContext.getCurrentUserIsSuperAdmin(),
+      );
+      return this.toolService.listEvaluations(org, query, scope);
     }
 
     @Get(`${base}/evaluations/:id`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async getEvaluation(@Param('org') org: string, @Param('id') id: string) {
       return this.toolService.getEvaluation(org, id);
     }
 
     @Put(`${base}/evaluations/:id/responses`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     async upsertResponses(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -256,6 +269,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/complete`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     async complete(@Param('org') org: string, @Param('id') id: string) {
       const user = await this.requestContext.getCurrentUser();
       return this.toolService.complete(org, id, user?.id);
@@ -263,12 +277,14 @@ export function createIndicatorToolController(
 
     @Get(`${base}/evaluations/:id/summary`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async summary(@Param('org') org: string, @Param('id') id: string) {
       return this.toolService.summary(org, id);
     }
 
     @Get(`${base}/evaluations/:id/summary/export`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async summaryExport(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -280,6 +296,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/summary/export-pptx`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async summaryExportPptx(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -301,6 +318,7 @@ export function createIndicatorToolController(
 
     @Get(`${base}/profiles/:profileId/evaluation-history`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('profile', 'profileId')
     async evaluationHistory(
       @Param('org') org: string,
       @Param('profileId') profileId: string,
@@ -312,12 +330,14 @@ export function createIndicatorToolController(
 
     @Get(`${base}/evaluations/:id/measures`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async listMeasures(@Param('org') org: string, @Param('id') id: string) {
       return this.toolService.listMeasures(org, id);
     }
 
     @Post(`${base}/evaluations/:id/measures`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     async createMeasure(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -329,6 +349,7 @@ export function createIndicatorToolController(
 
     @Patch(`${base}/measures/:id`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('indicator-measure')
     async updateMeasureProgress(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -342,6 +363,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/responses/:indicatorId/improve-observation`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     @UseGuards(AssessmentAiThrottlerGuard)
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async improveObservation(
@@ -364,6 +386,7 @@ export function createIndicatorToolController(
       `${base}/evaluations/:id/${cfg.sectionSegment}/:number/suggest-measures`,
     )
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     @UseGuards(AssessmentAiThrottlerGuard)
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async suggestMeasuresForSection(
@@ -382,6 +405,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/suggest-measures`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     @UseGuards(AssessmentAiThrottlerGuard)
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async suggestMeasuresForEvaluation(
@@ -394,6 +418,7 @@ export function createIndicatorToolController(
 
     @Get(`${base}/evaluations/:id/impact-priority`)
     @RequireAssessmentPermission(mod, 'read')
+    @ScopedTo('evaluation')
     async getImpactPriority(
       @Param('org') org: string,
       @Param('id') id: string,
@@ -403,6 +428,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/detect-inconsistencies`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     @UseGuards(AssessmentAiThrottlerGuard)
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async detectInconsistencies(
@@ -415,6 +441,7 @@ export function createIndicatorToolController(
 
     @Post(`${base}/evaluations/:id/executive-narrative`)
     @RequireAssessmentPermission(mod, 'write')
+    @ScopedTo('evaluation')
     @UseGuards(AssessmentAiThrottlerGuard)
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     async generateExecutiveNarrative(
