@@ -49,10 +49,12 @@ export interface EvaluationRepository {
     profileId: string;
     startedBy: string;
   }): Promise<EvaluationRecord>;
+  /** `evaluatorId` recorta a las organizaciones asignadas a ese evaluador. */
   list(
     organisation: string,
     tool: AssessmentToolCode,
     page: { skip: number; take: number },
+    evaluatorId?: string,
   ): Promise<{ items: EvaluationListItem[]; total: number }>;
   findWithStructure(
     organisation: string,

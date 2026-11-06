@@ -77,8 +77,14 @@ export class PrismaEvaluationRepository implements EvaluationRepository {
     organisation: string,
     tool: AssessmentToolCode,
     page: { skip: number; take: number },
+    evaluatorId?: string,
   ) {
-    const where = { organisation, deletedAt: null, template: { tool } };
+    const where = {
+      organisation,
+      deletedAt: null,
+      template: { tool },
+      ...(evaluatorId ? { profile: { evaluatorId } } : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.assessmentEvaluation.findMany({
         where,

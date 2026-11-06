@@ -583,11 +583,13 @@ export abstract class EvaluationToolService {
   async listEvaluations(
     organisation: string,
     query: PaginationQueryDto = new PaginationQueryDto(),
+    scope: AssessmentProfileScope = {},
   ) {
     const { items, total } = await this.evaluations.list(
       organisation,
       this.tool,
       pageArgs(query),
+      scope.evaluatorId,
     );
     return pageResult(query, items, total);
   }

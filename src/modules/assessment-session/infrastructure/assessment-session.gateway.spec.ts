@@ -21,10 +21,18 @@ function createMockSocket(
 describe('AssessmentSessionGateway', () => {
   let gateway: AssessmentSessionGateway;
   let verify: jest.Mock;
+  let accessScope: { resolveProfileScope: jest.Mock; assertInScope: jest.Mock };
 
   beforeEach(() => {
     verify = jest.fn();
-    gateway = new AssessmentSessionGateway({ verify, sign: jest.fn() });
+    accessScope = {
+      resolveProfileScope: jest.fn().mockResolvedValue({}),
+      assertInScope: jest.fn().mockResolvedValue(undefined),
+    };
+    gateway = new AssessmentSessionGateway(
+      { verify, sign: jest.fn() },
+      accessScope as any,
+    );
   });
 
   describe('handleConnection', () => {
@@ -75,7 +83,7 @@ describe('AssessmentSessionGateway', () => {
   });
 
   describe('handleJoin', () => {
-    it('joins the evaluation room when the user belongs to the org', () => {
+    it('joins the evaluation room when the user belongs to the org', async () => {
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -83,11 +91,14 @@ describe('AssessmentSessionGateway', () => {
         organisations: ['demo'],
         isSuperAdmin: false,
       };
-      gateway.handleJoin(client as any, { org: 'demo', evaluationId: 'ev-1' });
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
       expect(client.join).toHaveBeenCalledWith('eval:ev-1');
     });
 
-    it('rejects a join for an org the user does not belong to', () => {
+    it('rejects a join for an org the user does not belong to', async () => {
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -95,12 +106,15 @@ describe('AssessmentSessionGateway', () => {
         organisations: ['other'],
         isSuperAdmin: false,
       };
-      gateway.handleJoin(client as any, { org: 'demo', evaluationId: 'ev-1' });
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
       expect(client.join).not.toHaveBeenCalled();
       expect(client.emit).toHaveBeenCalledWith('error', expect.any(Object));
     });
 
-    it('lets a superadmin join any org', () => {
+    it('lets a superadmin join any org', async () => {
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -108,8 +122,35 @@ describe('AssessmentSessionGateway', () => {
         organisations: [],
         isSuperAdmin: true,
       };
-      gateway.handleJoin(client as any, { org: 'demo', evaluationId: 'ev-1' });
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
       expect(client.join).toHaveBeenCalledWith('eval:ev-1');
+    });
+
+    it('keeps an evaluator out of an evaluation of an unassigned profile', async () => {
+      const client = createMockSocket();
+      client.data.auth = {
+        userId: 'u',
+        email: 'e',
+        organisations: ['demo'],
+        isSuperAdmin: false,
+      };
+      accessScope.resolveProfileScope.mockResolvedValue({ evaluatorId: 'u' });
+      accessScope.assertInScope.mockRejectedValue(new Error('not found'));
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
+      expect(accessScope.assertInScope).toHaveBeenCalledWith(
+        'demo',
+        { evaluatorId: 'u' },
+        'evaluation',
+        'ev-1',
+      );
+      expect(client.join).not.toHaveBeenCalled();
+      expect(client.emit).toHaveBeenCalledWith('error', expect.any(Object));
     });
   });
 

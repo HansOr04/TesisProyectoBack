@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { TOKEN_ISSUER, TokenIssuerPort } from '../../identity/domain/ports';
+import { AssessmentAccessScopeService } from '../../assessment-core/application/assessment-access-scope.service';
 import {
   RealtimeNotifierPort,
   ScoreUpdatedEvent,
@@ -24,7 +25,8 @@ export interface AssessmentSocketAuth {
 // Varios facilitadores calificando la misma evaluación en el taller ven el
 // avance del otro en vivo. Namespace propio /assessment, sala por evaluación
 // (eval:<evaluationId>) para no reenviar eventos a clientes ajenos. El
-// handshake valida el mismo JWT que la API HTTP.
+// handshake valida el mismo JWT que la API HTTP, y un evaluador solo entra a
+// la sala de una evaluación de una organización que tiene asignada.
 @WebSocketGateway({ namespace: '/assessments', cors: true })
 export class AssessmentSessionGateway
   implements OnGatewayConnection, RealtimeNotifierPort
@@ -34,7 +36,10 @@ export class AssessmentSessionGateway
   @WebSocketServer()
   server: Server;
 
-  constructor(@Inject(TOKEN_ISSUER) private readonly tokens: TokenIssuerPort) {}
+  constructor(
+    @Inject(TOKEN_ISSUER) private readonly tokens: TokenIssuerPort,
+    private readonly accessScope: AssessmentAccessScopeService,
+  ) {}
 
   async handleConnection(client: Socket): Promise<void> {
     try {
@@ -60,10 +65,10 @@ export class AssessmentSessionGateway
   }
 
   @SubscribeMessage('join')
-  handleJoin(
+  async handleJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { org?: string; evaluationId?: string },
-  ): void {
+  ): Promise<void> {
     const socketAuth = client.data.auth as AssessmentSocketAuth | undefined;
     if (!socketAuth || !body?.org || !body?.evaluationId) {
       return;
@@ -73,6 +78,22 @@ export class AssessmentSessionGateway
       !socketAuth.organisations.includes(body.org)
     ) {
       client.emit('error', { message: 'Not a member of this organisation' });
+      return;
+    }
+    try {
+      const scope = await this.accessScope.resolveProfileScope(
+        body.org,
+        socketAuth.userId,
+        socketAuth.isSuperAdmin,
+      );
+      await this.accessScope.assertInScope(
+        body.org,
+        scope,
+        'evaluation',
+        body.evaluationId,
+      );
+    } catch {
+      client.emit('error', { message: 'Evaluation not found' });
       return;
     }
     void client.join(this.room(body.evaluationId));
