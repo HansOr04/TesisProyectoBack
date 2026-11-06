@@ -303,15 +303,22 @@ export function createIndicatorToolController(
       @Body() dto: ExportPptxDto,
       @Res() res: Response,
     ) {
-      const user = await this.requestContext.getCurrentUser();
+      const user = await this.requestContext.requireCurrentUser();
+      // «Todo el proyecto» de un evaluador abarca solo sus organizaciones.
+      const scope = await this.accessScope.resolveProfileScope(
+        org,
+        user.id,
+        this.requestContext.getCurrentUserIsSuperAdmin(),
+      );
       sendFile(
         res,
         await this.toolService.summaryExportPptx(
           org,
           id,
           dto.narrative,
-          user?.id,
+          user.id,
           dto.ganttScope,
+          scope.evaluatorId,
         ),
       );
     }

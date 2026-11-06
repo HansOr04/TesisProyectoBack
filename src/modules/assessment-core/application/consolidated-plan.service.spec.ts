@@ -46,6 +46,10 @@ describe('ConsolidatedPlanService', () => {
   let service: ConsolidatedPlanService;
   let indicatorRows: ReturnType<typeof indicatorMeasure>[];
   let mitigationRows: ReturnType<typeof mitigationMeasure>[];
+  let prisma: {
+    assessmentIndicatorMeasure: { findMany: jest.Mock };
+    assessmentMitigationMeasure: { findMany: jest.Mock };
+  };
 
   beforeEach(() => {
     indicatorRows = [
@@ -88,15 +92,34 @@ describe('ConsolidatedPlanService', () => {
       ),
     ];
 
-    const prisma = {
+    prisma = {
       assessmentIndicatorMeasure: {
         findMany: jest.fn().mockImplementation(() => indicatorRows),
       },
       assessmentMitigationMeasure: {
         findMany: jest.fn().mockImplementation(() => mitigationRows),
       },
-    } as unknown as PrismaService;
-    service = new ConsolidatedPlanService(prisma);
+    };
+    service = new ConsolidatedPlanService(prisma as unknown as PrismaService);
+  });
+
+  it('con alcance de evaluador, el Gantt del proyecto solo lee sus organizaciones', async () => {
+    await service.gantt('demo', 'project', 'p1', 'eval-1');
+    const scoped = {
+      deletedAt: null,
+      organisation: 'demo',
+      profile: { evaluatorId: 'eval-1' },
+    };
+    expect(prisma.assessmentIndicatorMeasure.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ evaluation: scoped }),
+      }),
+    );
+    expect(prisma.assessmentMitigationMeasure.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ risk: { evaluation: scoped } }),
+      }),
+    );
   });
 
   it('reúne las dos tablas de medidas y las ordena por fecha de inicio', async () => {
