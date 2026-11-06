@@ -365,6 +365,7 @@ export class RiskToolService extends EvaluationToolService {
     narrative?: string,
     actorId?: string,
     ganttScope: ConsolidatedPlanScope = 'tool',
+    evaluatorId?: string,
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -412,6 +413,7 @@ export class RiskToolService extends EvaluationToolService {
       organisation,
       ganttScope,
       evaluation.profileId,
+      evaluatorId,
     );
 
     const file = await buildMitigationPlanPptx(this.definition, {

@@ -64,12 +64,20 @@ export class ConsolidatedPlanService {
 
   async measures(
     organisation: string,
-    filter: { profileId?: string; groupBy: 'tool' | 'profile' },
+    filter: {
+      profileId?: string;
+      groupBy: 'tool' | 'profile';
+      /** Con alcance de evaluador, solo sus organizaciones asignadas. */
+      evaluatorId?: string;
+    },
   ): Promise<ConsolidatedMeasure[]> {
     const evaluation = {
       deletedAt: null,
       organisation,
       ...(filter.profileId ? { profileId: filter.profileId } : {}),
+      ...(filter.evaluatorId
+        ? { profile: { evaluatorId: filter.evaluatorId } }
+        : {}),
     };
     const evaluationLabels = {
       profile: { select: { name: true } },
@@ -273,6 +281,7 @@ export class ConsolidatedPlanService {
     organisation: string,
     scope: ConsolidatedPlanScope,
     profileId: string,
+    evaluatorId?: string,
   ): Promise<
     | {
         title: string;
@@ -293,6 +302,7 @@ export class ConsolidatedPlanService {
     const rows = await this.measures(organisation, {
       profileId: byOrganisation ? profileId : undefined,
       groupBy: byOrganisation ? 'tool' : 'profile',
+      evaluatorId,
     });
 
     const groups = new Map<string, ConsolidatedMeasure[]>();

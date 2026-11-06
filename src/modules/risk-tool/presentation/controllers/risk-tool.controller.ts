@@ -359,13 +359,20 @@ export class RiskToolController {
     @Body() dto: ExportPptxDto,
     @Res() res: Response,
   ) {
-    const user = await this.requestContext.getCurrentUser();
+    const user = await this.requestContext.requireCurrentUser();
+    // «Todo el proyecto» de un evaluador abarca solo sus organizaciones.
+    const scope = await this.accessScope.resolveProfileScope(
+      org,
+      user.id,
+      this.requestContext.getCurrentUserIsSuperAdmin(),
+    );
     const result = await this.toolService.mitigationPlanExportPptx(
       org,
       id,
       dto.narrative,
-      user?.id,
+      user.id,
       dto.ganttScope,
+      scope.evaluatorId,
     );
     res.setHeader('Content-Type', result.contentType);
     res.setHeader(

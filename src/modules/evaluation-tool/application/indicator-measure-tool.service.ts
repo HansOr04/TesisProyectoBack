@@ -125,6 +125,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     narrative?: string,
     actorId?: string,
     ganttScope: ConsolidatedPlanScope = 'tool',
+    evaluatorId?: string,
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -163,6 +164,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
       organisation,
       ganttScope,
       evaluation.profileId,
+      evaluatorId,
     );
 
     const file = await buildSummaryPptx(this.definition, {
