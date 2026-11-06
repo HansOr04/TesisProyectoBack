@@ -38,6 +38,10 @@ import {
   AssessmentPermissionGuard,
   RequireAssessmentPermission,
 } from '../../../assessment-core/presentation/guards/assessment-permission.guard';
+import {
+  AssessmentScopeGuard,
+  ScopedTo,
+} from '../../../assessment-core/presentation/guards/assessment-scope.guard';
 import { AssessmentAccessScopeService } from '../../../assessment-core/application/assessment-access-scope.service';
 import { AssessmentAiThrottlerGuard } from '../../../assessment-core/presentation/guards/assessment-ai-throttler.guard';
 
@@ -47,7 +51,7 @@ import { AssessmentAiThrottlerGuard } from '../../../assessment-core/presentatio
 @ApiBearerAuth()
 @Controller()
 @RequireAuthenticated()
-@UseGuards(AssessmentPermissionGuard)
+@UseGuards(AssessmentPermissionGuard, AssessmentScopeGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -216,6 +220,7 @@ export class RiskToolController {
 
   @Post(':org/assessments/risk/evaluations')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('profile', 'profileId', 'body')
   async createEvaluation(
     @Param('org') org: string,
     @Body() dto: CreateAssessmentEvaluationDto,
@@ -230,17 +235,25 @@ export class RiskToolController {
     @Param('org') org: string,
     @Query() query: PaginationQueryDto,
   ) {
-    return this.toolService.listEvaluations(org, query);
+    const user = await this.requestContext.requireCurrentUser();
+    const scope = await this.accessScope.resolveProfileScope(
+      org,
+      user.id,
+      this.requestContext.getCurrentUserIsSuperAdmin(),
+    );
+    return this.toolService.listEvaluations(org, query, scope);
   }
 
   @Get(':org/assessments/risk/evaluations/:id')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async getEvaluation(@Param('org') org: string, @Param('id') id: string) {
     return this.toolService.getEvaluation(org, id);
   }
 
   @Put(':org/assessments/risk/evaluations/:id/responses')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   async upsertResponses(
     @Param('org') org: string,
     @Param('id') id: string,
@@ -252,6 +265,7 @@ export class RiskToolController {
 
   @Post(':org/assessments/risk/evaluations/:id/complete')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   async complete(@Param('org') org: string, @Param('id') id: string) {
     const user = await this.requestContext.getCurrentUser();
     return this.toolService.complete(org, id, user?.id);
@@ -259,12 +273,14 @@ export class RiskToolController {
 
   @Get(':org/assessments/risk/evaluations/:id/summary')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async summary(@Param('org') org: string, @Param('id') id: string) {
     return this.toolService.summary(org, id);
   }
 
   @Get(':org/assessments/risk/profiles/:profileId/evaluation-history')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('profile', 'profileId')
   async evaluationHistory(
     @Param('org') org: string,
     @Param('profileId') profileId: string,
@@ -276,12 +292,14 @@ export class RiskToolController {
 
   @Get(':org/assessments/risk/evaluations/:id/risks')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async listRisks(@Param('org') org: string, @Param('id') id: string) {
     return this.toolService.listRisks(org, id);
   }
 
   @Post(':org/assessments/risk/risks/:riskId/measures')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('risk', 'riskId')
   async createMeasure(
     @Param('org') org: string,
     @Param('riskId') riskId: string,
@@ -293,6 +311,7 @@ export class RiskToolController {
 
   @Patch(':org/assessments/risk/measures/:id')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('mitigation-measure')
   async updateMeasureProgress(
     @Param('org') org: string,
     @Param('id') id: string,
@@ -304,12 +323,14 @@ export class RiskToolController {
 
   @Get(':org/assessments/risk/evaluations/:id/gantt')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async gantt(@Param('org') org: string, @Param('id') id: string) {
     return this.toolService.gantt(org, id);
   }
 
   @Get(':org/assessments/risk/evaluations/:id/mitigation-plan/export')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async mitigationPlanExport(
     @Param('org') org: string,
     @Param('id') id: string,
@@ -331,6 +352,7 @@ export class RiskToolController {
 
   @Post(':org/assessments/risk/evaluations/:id/mitigation-plan/export-pptx')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async mitigationPlanExportPptx(
     @Param('org') org: string,
     @Param('id') id: string,
@@ -360,6 +382,7 @@ export class RiskToolController {
     ':org/assessments/risk/evaluations/:id/responses/:indicatorId/improve-observation',
   )
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   @UseGuards(AssessmentAiThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async improveObservation(
@@ -382,6 +405,7 @@ export class RiskToolController {
     ':org/assessments/risk/evaluations/:id/principles/:number/suggest-measures',
   )
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   @UseGuards(AssessmentAiThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async suggestMeasuresForSection(
@@ -400,6 +424,7 @@ export class RiskToolController {
 
   @Post(':org/assessments/risk/evaluations/:id/suggest-measures')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   @UseGuards(AssessmentAiThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async suggestMeasuresForEvaluation(
@@ -415,12 +440,14 @@ export class RiskToolController {
   // ni auditoría de assessment-ai.call).
   @Get(':org/assessments/risk/evaluations/:id/impact-priority')
   @RequireAssessmentPermission('risk-tool', 'read')
+  @ScopedTo('evaluation')
   async getImpactPriority(@Param('org') org: string, @Param('id') id: string) {
     return this.toolService.getImpactPriority(org, id);
   }
 
   @Post(':org/assessments/risk/evaluations/:id/detect-inconsistencies')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   @UseGuards(AssessmentAiThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async detectInconsistencies(
@@ -433,6 +460,7 @@ export class RiskToolController {
 
   @Post(':org/assessments/risk/evaluations/:id/executive-narrative')
   @RequireAssessmentPermission('risk-tool', 'write')
+  @ScopedTo('evaluation')
   @UseGuards(AssessmentAiThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async generateExecutiveNarrative(

@@ -17,12 +17,16 @@ import {
   AssessmentPermissionGuard,
   RequireAssessmentPermission,
 } from '../guards/assessment-permission.guard';
+import {
+  AssessmentScopeGuard,
+  ScopedTo,
+} from '../guards/assessment-scope.guard';
 
 @ApiTags('Aplicabilidad de KPI')
 @ApiBearerAuth()
 @Controller()
 @RequireAuthenticated()
-@UseGuards(AssessmentPermissionGuard)
+@UseGuards(AssessmentPermissionGuard, AssessmentScopeGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -38,12 +42,14 @@ export class AssessmentApplicabilityController {
 
   @Get(':org/assessments/profiles/:id/applicability')
   @RequireAssessmentPermission('assessment-core', 'read')
+  @ScopedTo('profile')
   async get(@Param('org') org: string, @Param('id') id: string) {
     return this.applicabilityService.get(org, id);
   }
 
   @Put(':org/assessments/profiles/:id/applicability')
   @RequireAssessmentPermission('assessment-core', 'write')
+  @ScopedTo('profile')
   async set(
     @Param('org') org: string,
     @Param('id') id: string,

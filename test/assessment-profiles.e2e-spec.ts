@@ -304,6 +304,99 @@ describe('Assessment profiles (e2e)', () => {
     ).toBe(true);
   });
 
+  it('keeps an evaluator out of every route of an unassigned profile', async () => {
+    const http = (token: string) => ({
+      get: (path: string) =>
+        request(app.getHttpServer())
+          .get(`/${ORG}/assessments/${path}`)
+          .set('Authorization', `Bearer ${token}`),
+      send: (method: 'post' | 'put' | 'patch', path: string, body: object) =>
+        request(app.getHttpServer())
+          [method](`/${ORG}/assessments/${path}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send(body),
+    });
+    const admin = http(adminToken);
+    const evaluator = http(evaluatorToken);
+
+    const profile = await admin
+      .send('post', 'profiles', {
+        name: `E2E Ajena ${Date.now()}`,
+        type: 'ASSOCIATION',
+        country: 'EC',
+        mainProduct: 'cacao',
+        memberCount: 20,
+      })
+      .expect(201);
+    createdProfileIds.push(profile.body.id);
+    const evaluation = await admin
+      .send('post', 'organizational/evaluations', {
+        profileId: profile.body.id,
+      })
+      .expect(201);
+    const p = profile.body.id as string;
+    const e = evaluation.body.id as string;
+
+    // Sin asignar: el evaluador no llega a la organización ni a lo que cuelga de ella.
+    await evaluator.get(`profiles/${p}`).expect(404);
+    await evaluator.get(`profiles/${p}/applicability`).expect(404);
+    await evaluator
+      .send('put', `profiles/${p}/applicability`, {
+        excludedSectionIds: [],
+        excludedIndicatorIds: [],
+      })
+      .expect(404);
+    await evaluator
+      .send('patch', `profiles/${p}`, { tradeName: 'Ajena' })
+      .expect(404);
+    await evaluator
+      .send('post', 'organizational/evaluations', { profileId: p })
+      .expect(404);
+    await evaluator.get(`organizational/evaluations/${e}`).expect(404);
+    await evaluator.get(`organizational/evaluations/${e}/summary`).expect(404);
+    await evaluator.get(`organizational/evaluations/${e}/measures`).expect(404);
+    await evaluator
+      .get(`organizational/profiles/${p}/evaluation-history`)
+      .expect(404);
+    await evaluator
+      .send('put', `organizational/evaluations/${e}/responses`, {
+        responses: [],
+      })
+      .expect(404);
+    const list = await evaluator.get('organizational/evaluations').expect(200);
+    expect(list.body.map((x: { id: string }) => x.id)).not.toContain(e);
+
+    // Asignada: entra, edita sus datos, pero no puede reasignarla.
+    const me = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${evaluatorToken}`)
+      .expect(200);
+    await admin
+      .send('patch', `profiles/${p}`, { evaluatorId: me.body.id })
+      .expect(200);
+    await evaluator.get(`organizational/evaluations/${e}`).expect(200);
+    await evaluator
+      .send('patch', `profiles/${p}`, { tradeName: 'Propia' })
+      .expect(200);
+    await evaluator
+      .send('patch', `profiles/${p}`, { evaluatorId: null })
+      .expect(403);
+
+    // Lo que crea el evaluador queda a su cargo y lo sigue viendo.
+    const own = await evaluator
+      .send('post', 'profiles', {
+        name: `E2E Creada por evaluador ${Date.now()}`,
+        type: 'COMPANY',
+        country: 'EC',
+        mainProduct: 'cacao',
+        memberCount: 5,
+      })
+      .expect(201);
+    createdProfileIds.push(own.body.id);
+    expect(own.body.evaluatorId).toBe(me.body.id);
+    await evaluator.get(`profiles/${own.body.id}/applicability`).expect(200);
+  });
+
   it('denies delete to an evaluator (needs assessment-core:delete)', async () => {
     await request(app.getHttpServer())
       .delete(`/${ORG}/assessments/profiles/does-not-matter`)
