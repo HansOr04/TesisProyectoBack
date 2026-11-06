@@ -258,6 +258,35 @@ describe('Assessment profiles (e2e)', () => {
       .expect(400);
   });
 
+  it('validates the contact phone with the digits of its country', async () => {
+    const base = {
+      type: 'COMPANY',
+      country: 'CO',
+      mainProduct: 'café',
+      memberCount: 12,
+    };
+    await request(app.getHttpServer())
+      .post(`/${ORG}/assessments/profiles`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        ...base,
+        name: `E2E Teléfono corto ${Date.now()}`,
+        contactPhone: '+57 312345678',
+      })
+      .expect(400);
+    const created = await request(app.getHttpServer())
+      .post(`/${ORG}/assessments/profiles`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        ...base,
+        name: `E2E Teléfono Colombia ${Date.now()}`,
+        contactPhone: '+57 3123456789',
+      })
+      .expect(201);
+    createdProfileIds.push(created.body.id);
+    expect(created.body.contactPhone).toBe('+57 3123456789');
+  });
+
   it('scopes an evaluator to the profiles assigned to them', async () => {
     const own = await request(app.getHttpServer())
       .get(`/${ORG}/assessments/profiles`)
