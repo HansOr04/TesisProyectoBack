@@ -1,8 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './modules/audit/audit.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AssessmentAiModule } from './modules/assessment-ai/assessment-ai.module';
@@ -21,8 +20,9 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    // Límite global generoso; los endpoints de IA aplican su propio límite
-    // por usuario (AssessmentAiThrottlerGuard, 10/min).
+    // Límite global generoso, por usuario con sesión (UserThrottlerGuard, en
+    // IdentityModule); los endpoints de IA aplican su propio límite por usuario
+    // (AssessmentAiThrottlerGuard, 10/min).
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -38,7 +38,6 @@ import { HealthController } from './shared/infrastructure/http/health.controller
     AssessmentAnalyticsModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
