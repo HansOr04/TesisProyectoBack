@@ -60,3 +60,4 @@ heroku run npm run prisma:seed:prod
 `DATABASE_URL` la define el addon de Postgres; `PORT` lo define Heroku en runtime. El resto de variables son las de `.env.example`.
 
 Entornos, dónde vive cada variable y reglas para los secretos: [`docs/entornos-y-secretos.md`](docs/entornos-y-secretos.md).
+Respaldos diarios de la base y cómo restaurarlos: [`docs/respaldos.md`](docs/respaldos.md).
