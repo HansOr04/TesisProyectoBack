@@ -27,10 +27,14 @@ heroku pg:backups -a evaluartesis
 `pg:backups` lista los respaldos con su fecha, tamaño y estado (`Completed`).
 
 **Cuántos días se guardan.** Heroku conserva los respaldos programados según el
-plan de la base (`heroku pg:info -a evaluartesis` muestra el plan). CA-66.2 pide
-al menos los últimos 7 días: se confirma con `pg:backups` una semana después de
-programarlo. Si el plan guardara menos, se sube de plan o se agrega una copia
-semanal descargada con `pg:backups:download`.
+plan de la base (`heroku pg:info -a evaluartesis` muestra el plan). La demo usa
+el plan *Essential*, que guarda un respaldo diario por cada uno de los últimos
+7 días, uno semanal y hasta 5 manuales (al pasar de 5, el más antiguo se borra).
+CA-66.2 pide al menos los últimos 7 días: se confirma con `pg:backups` una
+semana después de programarlo. Heroku **no avisa** si un respaldo programado
+falla, así que conviene revisar `pg:backups` de vez en cuando. Si se cambia de
+plan, hay que volver a revisar `pg:backups:schedules`: el cambio puede borrar la
+programación.
 
 ## Restaurar un respaldo para probarlo (HU-67)
 
@@ -69,3 +73,14 @@ heroku pg:backups:restore <id-del-respaldo> DATABASE_URL -a evaluartesis --confi
 
 Reemplaza **todos** los datos actuales por los del respaldo. Antes conviene
 sacar un respaldo del estado actual con `pg:backups:capture`.
+
+## Verificación del 8 de noviembre de 2026
+
+- Base de la demo: plan essential-0, PostgreSQL 18.4. No tenía respaldos
+  programados; desde ese día tiene uno diario a las 03:00 (America/Guayaquil).
+- Primer respaldo manual, `b001`: 209.74 KB, `Completed`.
+- `b001` se restauró en un contenedor `postgres:18`: los conteos de las 9
+  tablas comparadas coinciden con la demo, y el servidor conectado a la copia
+  inicia sesión, muestra el panel consolidado, los resúmenes de las
+  evaluaciones y genera los Excel.
+- Pendiente: el 15 de noviembre, `pg:backups` debe mostrar 7 respaldos diarios.
