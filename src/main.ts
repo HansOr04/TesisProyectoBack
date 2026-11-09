@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
@@ -12,10 +13,17 @@ import { AllExceptionsFilter } from './shared/infrastructure/http/all-exceptions
 import { StructuredLoggerService } from './shared/infrastructure/logging/structured-logger.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
   const config = app.get(ConfigService);
+
+  // Heroku atiende detrás de un enrutador que agrega X-Forwarded-For. Sin
+  // confiar en ese primer salto, req.ip era la del enrutador y los límites por
+  // IP (300 peticiones y 10 inicios de sesión por minuto) se compartían entre
+  // todos los usuarios de la plataforma: un taller podía quedarse sin poder
+  // iniciar sesión.
+  app.set('trust proxy', 1);
 
   app.use(helmet());
   app.use(compression());

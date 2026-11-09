@@ -24,6 +24,12 @@ export const REFRESH_COOKIE = 'assessment_refresh';
 // Solo se envía a /auth/*: el resto de la API nunca ve la cookie.
 const REFRESH_COOKIE_PATH = '/auth';
 
+// Inicios de sesión por minuto desde una misma IP. Con 10, un taller de 20
+// personas detrás del mismo router no podía entrar a la vez (11 de 20
+// rechazados en la prueba de carga de HU-68); 30 sigue frenando la fuerza
+// bruta, igual que la renovación de sesión.
+const LOGIN_LIMIT_PER_MINUTE = 30;
+
 @ApiTags('Autenticación')
 @Controller('auth')
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
@@ -65,7 +71,7 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: LOGIN_LIMIT_PER_MINUTE, ttl: 60000 } })
   async login(
     @Body() dto: LoginDto,
     @Headers('user-agent') userAgent: string | undefined,
@@ -82,7 +88,7 @@ export class AuthController {
   @Post('google')
   @Public()
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: LOGIN_LIMIT_PER_MINUTE, ttl: 60000 } })
   async loginWithGoogle(
     @Body() dto: OAuthLoginDto,
     @Headers('user-agent') userAgent: string | undefined,
