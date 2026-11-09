@@ -73,6 +73,12 @@ jobs:
           npx prisma migrate deploy
           npx prisma db seed
 
+      # HU-65: el modelo (schema.prisma) tiene que coincidir con lo que dejan
+      # las migraciones. Si alguien cambia el modelo sin crear su migración,
+      # el pull request no se puede integrar y el cambio nunca llega a Heroku.
+      - name: El modelo coincide con las migraciones
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
       - name: Pruebas de integración (PostgreSQL)
         run: npm run test:e2e -- --ci
 
