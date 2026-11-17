@@ -589,7 +589,7 @@ export abstract class EvaluationToolService {
       organisation,
       this.tool,
       pageArgs(query),
-      scope.evaluatorId,
+      scope,
     );
     return pageResult(query, items, total);
   }

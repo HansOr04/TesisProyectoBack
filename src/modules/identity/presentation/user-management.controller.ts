@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
   UsePipes,
@@ -23,6 +24,7 @@ import { RequireAuthenticated } from './decorators/auth.decorators';
 import {
   CreateOrganisationUserDto,
   UpdateOrganisationUserDto,
+  ViewerVisibilityDto,
 } from './dto/user-management.dto';
 
 // Gestión de usuarios de una organización. Requiere el permiso 'admin' del
@@ -76,6 +78,17 @@ export class UserManagementController {
     @Body() dto: UpdateOrganisationUserDto,
   ) {
     return this.users.updateMember(org, id, dto, await this.actor());
+  }
+
+  /** Qué organizaciones evaluadas ve un usuario con rol de visualizador. */
+  @Put(':org/users/:id/visibility')
+  @RequireAssessmentPermission('assessment-core', 'admin')
+  async setVisibility(
+    @Param('org') org: string,
+    @Param('id') id: string,
+    @Body() dto: ViewerVisibilityDto,
+  ) {
+    return this.users.setViewerVisibility(org, id, dto, await this.actor());
   }
 
   @Delete(':org/users/:id')

@@ -5,6 +5,7 @@ import {
   RequireGlobalSuperAdmin,
 } from '../../../identity/presentation/decorators/auth.decorators';
 import { AssessmentProfilesService } from '../../application/assessment-profiles.service';
+import { RequestContextService } from '../../../identity/application/request-context.service';
 
 // RF-08: vista cross-organización para el Administrador de plataforma.
 // A diferencia del resto de assessment-core (todo `:org/assessments/...`), esta ruta no
@@ -16,11 +17,16 @@ import { AssessmentProfilesService } from '../../application/assessment-profiles
 @Controller()
 @RequireAuthenticated()
 export class AssessmentAdminController {
-  constructor(private readonly profilesService: AssessmentProfilesService) {}
+  constructor(
+    private readonly profilesService: AssessmentProfilesService,
+    private readonly requestContext: RequestContextService,
+  ) {}
 
+  /** Solo de los proyectos que creó el superadministrador que consulta. */
   @Get('assessments/admin/all-profiles')
   @RequireGlobalSuperAdmin()
   async listAllProfiles() {
-    return this.profilesService.listAllForAdmin();
+    const actor = await this.requestContext.requireCurrentUser();
+    return this.profilesService.listAllForAdmin(actor.id);
   }
 }

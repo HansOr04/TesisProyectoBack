@@ -33,6 +33,11 @@ export class RequestContextService {
     return this.getAuthContext()?.isSuperAdmin === true;
   }
 
+  /** Superadministrador de la plataforma, aunque no sea dueño del proyecto actual. */
+  getCurrentUserIsPlatformSuperAdmin(): boolean {
+    return this.getAuthContext()?.isPlatformSuperAdmin === true;
+  }
+
   getCurrentUserOrganisations(): string[] {
     return this.getAuthContext()?.organisations ?? [];
   }

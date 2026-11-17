@@ -1,3 +1,7 @@
+import {
+  AssessmentProfileScope,
+  isUnrestrictedScope,
+} from '../../../assessment-core/application/assessment-access-scope.service';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../shared/infrastructure/database/prisma.service';
@@ -77,13 +81,13 @@ export class PrismaEvaluationRepository implements EvaluationRepository {
     organisation: string,
     tool: AssessmentToolCode,
     page: { skip: number; take: number },
-    evaluatorId?: string,
+    profileScope: AssessmentProfileScope = {},
   ) {
     const where = {
       organisation,
       deletedAt: null,
       template: { tool },
-      ...(evaluatorId ? { profile: { evaluatorId } } : {}),
+      ...(isUnrestrictedScope(profileScope) ? {} : { profile: profileScope }),
     };
     const [items, total] = await Promise.all([
       this.prisma.assessmentEvaluation.findMany({

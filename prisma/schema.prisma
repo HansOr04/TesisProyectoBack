@@ -24,6 +24,12 @@ model Organisation {
 
   name String
 
+  // Superadministrador que creó el proyecto. Un superadministrador solo
+  // tiene acceso total a los proyectos que creó; a los demás entra como
+  // cualquier usuario, con la membresía y el rol que le hayan dado.
+  createdById String?
+  createdBy   User?   @relation("OrganisationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
   members      OrganisationMember[]
   userRoles    AuthUserRole[]
   activityLogs ActivityLog[]
@@ -34,6 +40,8 @@ model Organisation {
   assessmentEvaluations AssessmentEvaluation[]
   indicatorMeasures     AssessmentIndicatorMeasure[]
   riskCountryParams     AssessmentRiskCountryParam[]
+
+  @@index([createdById])
 }
 
 model User {
@@ -52,10 +60,11 @@ model User {
   oauthProvider String?
   oauthSubject  String?
 
-  memberships   OrganisationMember[]
-  userRoles     AuthUserRole[]
-  activityLogs  ActivityLog[]
-  refreshTokens RefreshToken[]
+  memberships          OrganisationMember[]
+  userRoles            AuthUserRole[]
+  createdOrganisations Organisation[]       @relation("OrganisationCreator")
+  activityLogs         ActivityLog[]
+  refreshTokens        RefreshToken[]
 
   @@unique([oauthProvider, oauthSubject])
 }
@@ -469,16 +478,16 @@ model AssessmentResponse {
   indicatorId  String
   indicator    AssessmentIndicator  @relation(fields: [indicatorId], references: [id])
 
-  score       Int // 1..10 entero — validado también en DTO
-  observation String // obligatoria (RF-03/04/05)
+  score          Int // 1..10 entero — validado también en DTO
+  observation    String // obligatoria (RF-03/04/05)
   // score <= 5 ⇒ crítico automático; manualCritical ⇒ el evaluador lo marca
   // "requiere atención" a mano aunque el score sea alto. isCritical = OR de
   // ambos (se recalcula en cada guardado, es la fuente de verdad para listar
   // KPI críticos en el plan de acción).
-  isCritical      Boolean  @default(false)
-  manualCritical  Boolean  @default(false)
-  scoredBy        String // trazabilidad de autoría
-  scoredAt        DateTime @default(now())
+  isCritical     Boolean  @default(false)
+  manualCritical Boolean  @default(false)
+  scoredBy       String // trazabilidad de autoría
+  scoredAt       DateTime @default(now())
 
   @@unique([evaluationId, indicatorId])
   @@index([evaluationId])

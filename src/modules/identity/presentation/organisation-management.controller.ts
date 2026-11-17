@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -44,8 +45,16 @@ export class OrganisationManagementController {
 
   @Get()
   @RequireGlobalSuperAdmin()
-  list() {
-    return this.organisations.list();
+  async list() {
+    const actor = await this.requestContext.requireCurrentUser();
+    return this.organisations.list(actor.id);
+  }
+
+  /** Usuarios ya creados que se pueden asignar a un proyecto. */
+  @Get('assignable-users')
+  @RequireGlobalSuperAdmin()
+  assignableUsers(@Query('search') search?: string) {
+    return this.organisations.assignableUsers(search);
   }
 
   @Post()
