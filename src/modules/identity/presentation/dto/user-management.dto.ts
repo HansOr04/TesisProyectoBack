@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
@@ -58,4 +60,15 @@ export class UpdateOrganisationUserDto {
   @IsOptional()
   @IsIn([...ASSESSMENT_ROLE_CODES, null])
   roleCode?: (typeof ASSESSMENT_ROLE_CODES)[number] | null;
+}
+
+/** Organizaciones evaluadas que ve un visualizador. */
+export class ViewerVisibilityDto {
+  @IsBoolean()
+  allProfiles: boolean;
+
+  @IsArray()
+  @ArrayMaxSize(2000)
+  @IsString({ each: true })
+  profileIds: string[];
 }

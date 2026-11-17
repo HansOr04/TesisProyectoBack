@@ -1,3 +1,4 @@
+import type { AssessmentProfileScope } from '../../assessment-core/application/assessment-access-scope.service';
 import {
   BadRequestException,
   NotFoundException,
@@ -125,7 +126,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     narrative?: string,
     actorId?: string,
     ganttScope: ConsolidatedPlanScope = 'tool',
-    evaluatorId?: string,
+    profileScope: AssessmentProfileScope = {},
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -164,7 +165,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
       organisation,
       ganttScope,
       evaluation.profileId,
-      evaluatorId,
+      profileScope,
     );
 
     const file = await buildSummaryPptx(this.definition, {

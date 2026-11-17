@@ -1,3 +1,4 @@
+import type { AssessmentProfileScope } from '../../assessment-core/application/assessment-access-scope.service';
 import {
   Inject,
   Injectable,
@@ -365,7 +366,7 @@ export class RiskToolService extends EvaluationToolService {
     narrative?: string,
     actorId?: string,
     ganttScope: ConsolidatedPlanScope = 'tool',
-    evaluatorId?: string,
+    profileScope: AssessmentProfileScope = {},
   ) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,
@@ -413,7 +414,7 @@ export class RiskToolService extends EvaluationToolService {
       organisation,
       ganttScope,
       evaluation.profileId,
-      evaluatorId,
+      profileScope,
     );
 
     const file = await buildMitigationPlanPptx(this.definition, {

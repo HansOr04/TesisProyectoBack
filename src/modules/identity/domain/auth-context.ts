@@ -3,7 +3,13 @@
 export interface AuthContext {
   userId: string;
   email: string;
+  /**
+   * Acceso total en la petición actual. En una ruta de proyecto (`:org`) solo
+   * es verdadero para el superadministrador que creó ese proyecto.
+   */
   isSuperAdmin: boolean;
+  /** Superadministrador de la plataforma, sin importar el proyecto. */
+  isPlatformSuperAdmin: boolean;
   /** Ids de organización a las que pertenece el usuario. */
   organisations: string[];
 }

@@ -85,6 +85,12 @@ async function main(): Promise<void> {
       isSuperAdmin: true,
     },
   });
+  // El administrador inicial es el superadministrador dueño del proyecto
+  // base: solo el que crea un proyecto tiene acceso total a él.
+  await prisma.organisation.updateMany({
+    where: { id: organisation.id, createdById: null },
+    data: { createdById: admin.id },
+  });
   await prisma.organisationMember.upsert({
     where: {
       organisationId_userId: {

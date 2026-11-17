@@ -1,3 +1,4 @@
+import type { AssessmentProfileScope } from '../../../assessment-core/application/assessment-access-scope.service';
 import { AssessmentToolCode } from '../../../assessment-core/domain/assessment.constants';
 import {
   CompletedEvaluationPoint,
@@ -49,12 +50,12 @@ export interface EvaluationRepository {
     profileId: string;
     startedBy: string;
   }): Promise<EvaluationRecord>;
-  /** `evaluatorId` recorta a las organizaciones asignadas a ese evaluador. */
+  /** `profileScope` recorta a las organizaciones que el usuario puede ver. */
   list(
     organisation: string,
     tool: AssessmentToolCode,
     page: { skip: number; take: number },
-    evaluatorId?: string,
+    profileScope?: AssessmentProfileScope,
   ): Promise<{ items: EvaluationListItem[]; total: number }>;
   findWithStructure(
     organisation: string,

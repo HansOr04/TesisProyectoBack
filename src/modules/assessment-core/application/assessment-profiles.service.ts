@@ -59,9 +59,13 @@ export class AssessmentProfilesService {
   // (isSuperAdmin global). Excluye los perfiles marcados `confidential` —
   // ni siquiera el superadmin los ve aquí; la organización dueña sigue
   // viéndolos normalmente en su propio `:org/assessments/profiles`.
-  async listAllForAdmin() {
+  async listAllForAdmin(actorId: string) {
     const profiles = await this.prisma.assessmentOrganisationProfile.findMany({
-      where: { deletedAt: null, confidential: false },
+      where: {
+        deletedAt: null,
+        confidential: false,
+        organisationRef: { createdById: actorId, deletedAt: null },
+      },
       orderBy: { organisation: 'asc' },
     });
     const orgIds = Array.from(new Set(profiles.map((p) => p.organisation)));

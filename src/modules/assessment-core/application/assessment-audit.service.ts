@@ -16,6 +16,7 @@ export type AssessmentAuditAction =
   | 'organisation.reprovision'
   | 'assessment-role.assign'
   | 'assessment-role.revoke'
+  | 'assessment-role.viewer-visibility'
   | 'assessment-profile.create'
   | 'assessment-profile.update'
   | 'assessment-profile.delete'
