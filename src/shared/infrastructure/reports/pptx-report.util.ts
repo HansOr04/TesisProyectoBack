@@ -920,6 +920,209 @@ function addPointsCard(
   );
 }
 
+// ── Resumen ejecutivo: velocímetro del resultado global y síntesis ──────
+
+// Ángulos OOXML: 0° al este, creciendo en sentido horario. El semicírculo
+// superior va de 180° (0 %) a 360° (100 %). Cortes del semáforo: rojo hasta
+// 50 %, amarillo hasta 70 %, verde desde 70 %.
+const GAUGE_ZONES: Array<[number, number, string]> = [
+  [180, 270, REPORT_COLORS.tierRed],
+  [270, 306, REPORT_COLORS.tierAmber],
+  [306, 0, REPORT_COLORS.tierGreen],
+];
+
+function drawGauge(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  opts: { x: number; y: number; d: number; score: number },
+): number {
+  const { x, y, d } = opts;
+  const cx = x + d / 2;
+  const cy = y + d / 2;
+  for (const [from, to, color] of GAUGE_ZONES) {
+    slide.addShape(pptx.ShapeType.blockArc, {
+      x,
+      y,
+      w: d,
+      h: d,
+      angleRange: [from, to],
+      arcThicknessRatio: 0.17,
+      fill: { color },
+      line: { color, width: 0 },
+    });
+  }
+  const pct = scorePct(opts.score);
+  const theta = 180 + pct * 1.8;
+  const rad = (theta * Math.PI) / 180;
+  const len = (d / 2) * 0.7;
+  const thickness = Math.max(0.035, d * 0.022);
+  slide.addShape(pptx.ShapeType.rect, {
+    x: cx + (len / 2) * Math.cos(rad) - len / 2,
+    y: cy + (len / 2) * Math.sin(rad) - thickness / 2,
+    w: len,
+    h: thickness,
+    rotate: theta,
+    fill: { color: REPORT_COLORS.ink },
+    line: { color: REPORT_COLORS.ink, width: 0 },
+  });
+  const pivot = Math.max(0.1, d * 0.065);
+  slide.addShape(pptx.ShapeType.ellipse, {
+    x: cx - pivot / 2,
+    y: cy - pivot / 2,
+    w: pivot,
+    h: pivot,
+    fill: { color: REPORT_COLORS.ink },
+    line: { color: REPORT_COLORS.ink, width: 0 },
+  });
+  slide.addText(`${pct} %`, {
+    x,
+    y: cy + pivot * 0.8,
+    w: d,
+    h: 0.75,
+    fontSize: 40,
+    bold: true,
+    align: 'center',
+    valign: 'middle',
+    color: tierColor(opts.score),
+    fontFace: FONT,
+    margin: 0,
+  });
+  return cy + pivot * 0.8 + 0.75;
+}
+
+export function addExecutiveSummarySlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    globalScore: number;
+    /** "Capacidad alta", "Capacidad media"… */
+    level: string;
+    narrative: string;
+  },
+): void {
+  const t = theme(pptx);
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    badge: levelBadge(opts.globalScore),
+  });
+  const top = CONTENT_TOP;
+  const h = CONTENT_BOTTOM - top;
+  const leftW = 4.3;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: top,
+    w: leftW,
+    h,
+    rectRadius: 0.08,
+    fill: { color: REPORT_COLORS.white },
+    line: { color: REPORT_COLORS.rule, width: 0.75 },
+  });
+  slide.addText('Resultado global', {
+    x: X0,
+    y: top + 0.25,
+    w: leftW,
+    h: 0.3,
+    fontSize: 11,
+    bold: true,
+    color: REPORT_COLORS.muted,
+    fontFace: FONT,
+    align: 'center',
+    margin: 0,
+  });
+  const d = 3.2;
+  const bottom = drawGauge(pptx, slide, {
+    x: X0 + (leftW - d) / 2,
+    y: top + 0.75,
+    d,
+    score: opts.globalScore,
+  });
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0 + 0.6,
+    y: bottom + 0.2,
+    w: leftW - 1.2,
+    h: 0.42,
+    rectRadius: 0.21,
+    fill: { color: tierSoft(opts.globalScore) },
+    line: { color: tierColor(opts.globalScore), width: 1 },
+  });
+  slide.addText(opts.level, {
+    x: X0 + 0.6,
+    y: bottom + 0.2,
+    w: leftW - 1.2,
+    h: 0.42,
+    fontSize: 13,
+    bold: true,
+    color: tierColor(opts.globalScore),
+    fontFace: FONT,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+  slide.addText(
+    [
+      { text: '■ ', options: { color: REPORT_COLORS.tierRed } },
+      { text: '0–50 %   ', options: { color: REPORT_COLORS.body } },
+      { text: '■ ', options: { color: REPORT_COLORS.tierAmber } },
+      { text: '50–70 %   ', options: { color: REPORT_COLORS.body } },
+      { text: '■ ', options: { color: REPORT_COLORS.tierGreen } },
+      { text: '70–100 %', options: { color: REPORT_COLORS.body } },
+    ],
+    {
+      x: X0,
+      y: top + h - 0.55,
+      w: leftW,
+      h: 0.3,
+      fontSize: 10,
+      fontFace: FONT,
+      align: 'center',
+      margin: 0,
+    },
+  );
+
+  // Síntesis.
+  const rx = X0 + leftW + 0.3;
+  const rw = RIGHT - rx;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: rx,
+    y: top,
+    w: rw,
+    h,
+    rectRadius: 0.08,
+    fill: { color: t.tint },
+    line: { color: t.soft, width: 0.75 },
+  });
+  slide.addText('Síntesis', {
+    x: rx + 0.4,
+    y: top + 0.3,
+    w: rw - 0.8,
+    h: 0.4,
+    fontSize: 18,
+    bold: true,
+    color: t.dark,
+    fontFace: FONT,
+    margin: 0,
+  });
+  const text =
+    opts.narrative.trim() ||
+    'Esta evaluación no tiene una síntesis redactada. Las láminas siguientes presentan los resultados por sección, los KPI críticos y el plan de acción.';
+  const textH = h - 1.15;
+  slide.addText(text, {
+    x: rx + 0.4,
+    y: top + 0.85,
+    w: rw - 0.8,
+    h: textH,
+    fontSize: fitFontSize(text, rw - 0.8, textH, 17, 11, 0.44, 1.3),
+    color: REPORT_COLORS.ink,
+    fontFace: FONT,
+    valign: 'top',
+    lineSpacingMultiple: 1.15,
+    paraSpaceAfter: 6,
+    margin: 0,
+  });
+}
+
 export function addExecutiveReadingSlide(
   pptx: PptxGenJS,
   opts: {

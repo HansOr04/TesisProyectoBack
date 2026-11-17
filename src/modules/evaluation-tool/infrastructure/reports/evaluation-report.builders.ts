@@ -3,6 +3,7 @@ import {
   addCoverSlide,
   addEvolutionSlide,
   addExecutiveReadingSlide,
+  addExecutiveSummarySlide,
   addGlobalResultsSlide,
   addNumberedListSlide,
   addPlanSummarySlide,
@@ -365,6 +366,16 @@ export function addResultSlides(
   const best = sorted[0];
   const worst = sorted[sorted.length - 1];
 
+  // Segunda lámina: el resultado global y la síntesis (la que se escribió en
+  // la aplicación o, si no, la narrativa automática con los porcentajes).
+  addExecutiveSummarySlide(pptx, {
+    kicker: definition.displayName,
+    title: 'Resumen ejecutivo',
+    globalScore,
+    level: scoreLevelPhrase(definition, globalScore),
+    narrative: input.narrative,
+  });
+
   addGlobalResultsSlide(pptx, {
     kicker: 'Diagnóstico integral',
     title: `Resultados globales por ${sectionLabel.toLowerCase()}`,
@@ -411,10 +422,12 @@ export function addResultSlides(
   });
 
   const fromData = generalPointsFromData(evaluation, sectionScores);
+  // La síntesis ya va en el resumen ejecutivo; aquí va la lectura de cierre.
   const closing =
-    (input.customNarrative ? input.narrative : insights?.conclusion) ||
-    input.narrative ||
-    'Las láminas siguientes presentan el detalle por sección, los KPI críticos y el plan de acción.';
+    insights?.conclusion ||
+    (best && worst && best !== worst
+      ? `La asociación alcanza un resultado global de ${pctLabel(globalScore)} (${scoreLevelPhrase(definition, globalScore).toLowerCase()}). Su mejor desempeño está en ${best.name} (${pctLabel(best.weightedAvg)}) y la mayor brecha en ${worst.name} (${pctLabel(worst.weightedAvg)}), que es donde conviene priorizar el plan de acción.`
+      : `La asociación alcanza un resultado global de ${pctLabel(globalScore)} (${scoreLevelPhrase(definition, globalScore).toLowerCase()}).`);
   addExecutiveReadingSlide(pptx, {
     kicker: 'Lectura ejecutiva',
     title: 'Lectura ejecutiva del diagnóstico',
