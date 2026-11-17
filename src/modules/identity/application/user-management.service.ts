@@ -123,13 +123,18 @@ export class UserManagementService {
           'Ese correo ya pertenece a esta organización',
         );
       }
+      // Asignar una cuenta existente no cambia su contraseña: si no, quien
+      // administra un proyecto podría quedarse con la cuenta de cualquiera.
+      if (input.password) {
+        throw new ConflictException(
+          'Ese correo ya tiene una cuenta; asígnalo sin contraseña y conservará la suya',
+        );
+      }
+      this.assertCanManageSuperAdmin(user, actor);
       // Usuario existente en otra organización: se agrega como miembro.
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          ...(input.password
-            ? { passwordHash: await this.hasher.hash(input.password) }
-            : {}),
           ...(input.isSuperAdmin !== undefined && actor.isSuperAdmin
             ? { isSuperAdmin: input.isSuperAdmin }
             : {}),
@@ -181,6 +186,19 @@ export class UserManagementService {
         'Solo un superadministrador puede cambiar superadmin',
       );
     }
+    // El rol dentro del proyecto sí lo gestiona su administrador; la cuenta
+    // de un superadministrador (nombre, contraseña, activación) no.
+    if (
+      input.name !== undefined ||
+      input.password ||
+      input.isActive !== undefined
+    ) {
+      const target = await this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { isSuperAdmin: true },
+      });
+      this.assertCanManageSuperAdmin(target, actor);
+    }
     if (
       userId === actor.id &&
       (input.isActive === false || input.isSuperAdmin === false)
@@ -210,6 +228,17 @@ export class UserManagementService {
       await this.refreshTokens.revokeAllForUser(userId);
     }
     return this.getMember(organisation, userId);
+  }
+
+  private assertCanManageSuperAdmin(
+    target: { isSuperAdmin: boolean },
+    actor: Actor,
+  ): void {
+    if (target.isSuperAdmin && !actor.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo un superadministrador puede modificar la cuenta de otro superadministrador',
+      );
+    }
   }
 
   async removeMember(

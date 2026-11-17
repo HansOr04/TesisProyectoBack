@@ -29,6 +29,7 @@ describe('Project ownership and viewers (e2e)', () => {
   const suffix = Date.now().toString(36);
   const otherEmail = `superadmin-${suffix}@e2e.local`;
   const viewerEmail = `viewer-${suffix}@e2e.local`;
+  const orgAdminEmail = `org-admin-${suffix}@e2e.local`;
   const otherOrg = `e2e-${suffix}`;
   const profileIds: string[] = [];
 
@@ -93,7 +94,7 @@ describe('Project ownership and viewers (e2e)', () => {
 
   afterAll(async () => {
     const users = await prisma.user.findMany({
-      where: { email: { in: [otherEmail, viewerEmail] } },
+      where: { email: { in: [otherEmail, viewerEmail, orgAdminEmail] } },
       select: { id: true },
     });
     const ids = users.map((u) => u.id);
@@ -271,5 +272,72 @@ describe('Project ownership and viewers (e2e)', () => {
         profileIds: ['no-existe'],
       })
       .expect(404);
+  });
+
+  it('keeps an organisation admin inside their projects and away from superadmin', async () => {
+    const created = await as(adminToken)
+      .post(`/${ORG}/users`, {
+        email: orgAdminEmail,
+        name: 'Administrador de organización',
+        password: PASSWORD,
+        roleCode: 'assessment_admin',
+      })
+      .expect(201);
+    const orgAdmin = await login({ email: orgAdminEmail, password: PASSWORD });
+
+    // Solo ve los proyectos de los que es miembro.
+    await as(orgAdmin).get('/organisations').expect(403);
+    await as(orgAdmin).get('/organisations/assignable-users').expect(403);
+    await as(orgAdmin).get(`/${otherOrg}/assessments/profiles`).expect(403);
+    await as(orgAdmin).get(`/${otherOrg}/users`).expect(403);
+    const me = await as(orgAdmin).get('/auth/me').expect(200);
+    expect(
+      me.body.organisations.map(
+        (o: { organisation: string }) => o.organisation,
+      ),
+    ).toEqual([ORG]);
+
+    // No otorga superadmin, ni al crear ni al editar.
+    await as(orgAdmin)
+      .post(`/${ORG}/users`, {
+        email: `otro-super-${suffix}@e2e.local`,
+        name: 'No debería existir',
+        password: PASSWORD,
+        isSuperAdmin: true,
+      })
+      .expect(403);
+    await as(orgAdmin)
+      .patch(`/${ORG}/users/${created.body.id}`, { isSuperAdmin: true })
+      .expect(403);
+
+    // Tampoco toca la cuenta de un superadministrador de su proyecto.
+    const users = await as(orgAdmin).get(`/${ORG}/users`).expect(200);
+    const superAdmin = users.body.find(
+      (u: { email: string }) => u.email === ADMIN.email,
+    );
+    await as(orgAdmin)
+      .patch(`/${ORG}/users/${superAdmin.id}`, { password: 'otra-clave-123' })
+      .expect(403);
+    await as(orgAdmin)
+      .patch(`/${ORG}/users/${superAdmin.id}`, { isActive: false })
+      .expect(403);
+    await login(ADMIN);
+
+    // Asignar una cuenta existente nunca le cambia la contraseña.
+    await as(adminToken)
+      .post(`/${otherOrg}/users`, {
+        email: orgAdminEmail,
+        name: 'x',
+        password: 'otra-clave-123',
+      })
+      .expect(403);
+    await as(otherToken)
+      .post(`/${otherOrg}/users`, {
+        email: orgAdminEmail,
+        name: 'Administrador de organización',
+        password: 'otra-clave-123',
+      })
+      .expect(409);
+    await login({ email: orgAdminEmail, password: PASSWORD });
   });
 });
