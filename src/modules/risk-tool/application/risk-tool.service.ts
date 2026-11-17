@@ -383,7 +383,7 @@ export class RiskToolService extends EvaluationToolService {
       evaluation.responses.map((r) => [r.indicatorId, r]),
     );
 
-    const insights = await this.tryGenerateReportInsights(
+    const { insights, swot } = await this.tryGenerateReportInsights(
       organisation,
       evaluationId,
       this.buildAiReportContext(
@@ -396,14 +396,16 @@ export class RiskToolService extends EvaluationToolService {
             name: indicatorById.get(r.indicatorId)?.name ?? '',
             score: responseByIndicator.get(r.indicatorId)?.score ?? 0,
           })),
+        evaluation,
       ),
       actorId,
+      evaluation.status === 'COMPLETED',
     );
 
-    const finalNarrative =
-      narrative && narrative.trim().length > 0
-        ? narrative
-        : buildExecutiveNarrative(evaluation.profile, sectionScores, this.tool);
+    const customNarrative = !!narrative && narrative.trim().length > 0;
+    const finalNarrative = customNarrative
+      ? narrative!
+      : buildExecutiveNarrative(evaluation.profile, sectionScores, this.tool);
 
     const history = await this.evaluationHistory(
       organisation,
@@ -424,7 +426,9 @@ export class RiskToolService extends EvaluationToolService {
       risks,
       history,
       narrative: finalNarrative,
+      customNarrative,
       insights,
+      swot,
       consolidatedGantt,
     });
 

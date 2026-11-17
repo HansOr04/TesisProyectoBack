@@ -20,6 +20,7 @@ import {
   AiEvaluatedItem,
   AiReportContext,
   AiReportInsights,
+  AiSwot,
   NarrativeTone,
 } from '../domain/evaluation-tool-ai.types';
 import { EvaluationToolAiService } from './evaluation-tool-ai.service';
@@ -1202,13 +1203,18 @@ export abstract class EvaluationToolService {
     return narrative;
   }
 
-  /** Contexto liviano (puntajes agregados + ítems críticos) para la IA. */
+  /**
+   * Contexto liviano para la IA: puntajes agregados e ítems críticos. Con la
+   * evaluación se agregan los KPI mejor y peor calificados de cada sección y
+   * los datos de la organización, que necesitan las fortalezas, brechas y FODA.
+   */
   protected buildAiReportContext(
     globalScore: number,
     sectionScores: SectionScoreResult[],
     criticalItems: AiReportContext['criticalItems'],
+    evaluation?: EvaluationWithStructure,
   ): AiReportContext {
-    return {
+    const context: AiReportContext = {
       globalScore,
       sectionScores: sectionScores.map((s) => ({
         number: s.number,
@@ -1217,27 +1223,82 @@ export abstract class EvaluationToolService {
       })),
       criticalItems,
     };
+    if (!evaluation) return context;
+    const kpi = (r: EvaluationWithStructure['responses'][number]) => ({
+      code: r.indicator.code,
+      name: r.indicator.name,
+      score: r.score,
+      observation:
+        r.observation?.trim().length > 140
+          ? `${r.observation.trim().slice(0, 139)}…`
+          : r.observation?.trim() || undefined,
+    });
+    context.sectionDetails = evaluation.template.sections
+      .filter((section) =>
+        sectionScores.some((s) => s.number === section.number),
+      )
+      .map((section) => {
+        const ids = new Set(section.indicators.map((i) => i.id));
+        const sorted = evaluation.responses
+          .filter((r) => ids.has(r.indicatorId))
+          .sort((a, b) => b.score - a.score);
+        const best = sorted.slice(0, 3);
+        const worst = sorted
+          .slice(-3)
+          .reverse()
+          .filter((r) => !best.includes(r));
+        return {
+          number: section.number,
+          best: best.map(kpi),
+          worst: worst.map(kpi),
+        };
+      });
+    const p = evaluation.profile as EvaluationWithStructure['profile'] & {
+      memberCount?: number | null;
+    };
+    context.profile = {
+      name: p.name,
+      type: p.type,
+      country: p.country,
+      region: p.region,
+      mainProduct: p.mainProduct,
+      memberCount: p.memberCount ?? null,
+    };
+    return context;
   }
 
-  // Insights para el reporte en diapositivas: una sola llamada por export. Si
-  // la IA falla (rate limit, clave inválida) el reporte se genera sin ellos.
+  // Análisis de IA para el reporte en diapositivas: insights (fortalezas,
+  // brechas, hallazgos) y, si la evaluación está completada, el FODA. Las dos
+  // llamadas van en paralelo; si una falla (rate limit, clave inválida,
+  // tiempo) el reporte se genera sin esas diapositivas.
   protected async tryGenerateReportInsights(
     organisation: string,
     evaluationId: string,
     context: AiReportContext,
     actorId?: string,
-  ): Promise<AiReportInsights | null> {
-    try {
-      const insights = await this.aiService.generateReportInsights(context);
+    withSwot = false,
+  ): Promise<{ insights: AiReportInsights | null; swot: AiSwot | null }> {
+    const attempt = <T>(call: () => Promise<T>) =>
+      Promise.resolve()
+        .then(call)
+        .catch(() => null);
+    const [insights, swot] = await Promise.all([
+      attempt(() => this.aiService.generateReportInsights(context)),
+      withSwot
+        ? attempt(() => this.aiService.generateSwot(context))
+        : Promise.resolve(null),
+    ]);
+    if (insights || swot) {
       await this.auditService.record(
         organisation,
         'assessment-ai.call',
-        { evaluationId, capability: 'report-insights' },
+        {
+          evaluationId,
+          capability: swot ? 'report-insights+swot' : 'report-insights',
+        },
         actorId,
       );
-      return insights;
-    } catch {
-      return null;
     }
+    return { insights, swot };
   }
 }

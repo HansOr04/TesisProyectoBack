@@ -136,7 +136,7 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     const measures = await this.listMeasures(organisation, evaluationId);
     const criticalResponses = evaluation.responses.filter((r) => r.isCritical);
 
-    const insights = await this.tryGenerateReportInsights(
+    const { insights, swot } = await this.tryGenerateReportInsights(
       organisation,
       evaluationId,
       this.buildAiReportContext(
@@ -147,14 +147,16 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
           name: r.indicator.name,
           score: r.score,
         })),
+        evaluation,
       ),
       actorId,
+      evaluation.status === 'COMPLETED',
     );
 
-    const finalNarrative =
-      narrative && narrative.trim().length > 0
-        ? narrative
-        : buildExecutiveNarrative(evaluation.profile, sectionScores, this.tool);
+    const customNarrative = !!narrative && narrative.trim().length > 0;
+    const finalNarrative = customNarrative
+      ? narrative!
+      : buildExecutiveNarrative(evaluation.profile, sectionScores, this.tool);
 
     const history = await this.evaluationHistory(
       organisation,
@@ -175,7 +177,9 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
       measures,
       history,
       narrative: finalNarrative,
+      customNarrative,
       insights,
+      swot,
       consolidatedGantt,
     });
 

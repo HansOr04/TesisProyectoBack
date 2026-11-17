@@ -8,40 +8,113 @@ import type PptxGenJS from 'pptxgenjs';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
 
-// Diseño institucional y sobrio: fondo blanco, una sola familia tipográfica,
-// verde de la fundación como único color de marca y los colores de semáforo
-// reservados para los puntajes. Todos los gráficos son formas nativas, nunca
-// gráficos de Office: así se ven igual en PowerPoint, Keynote y Google Slides.
+// Reporte de resultados con el formato de las presentaciones de diagnóstico:
+// barra lateral y títulos en el color de la herramienta (azul Organizativa,
+// naranja Capacidades, verde Riesgos), resultados en porcentaje y colores de
+// semáforo reservados para el nivel de cada puntaje. Todos los gráficos son
+// formas nativas, nunca gráficos de Office: así se ven igual en PowerPoint,
+// Keynote y Google Slides.
 export const REPORT_COLORS = {
   brand: '2F6B3B',
-  brandSoft: 'E8F1EA',
   ink: '1E2B24',
   body: '3D4A42',
   muted: '6B7770',
-  rule: 'D5DCD7',
-  panel: 'F4F7F5',
+  rule: 'DDE2DF',
+  panel: 'F6F8F7',
+  track: 'E9ECEA',
   white: 'FFFFFF',
   tierRed: 'C62828',
-  tierAmber: 'D99A06',
+  tierRedSoft: 'FDEDED',
+  tierAmber: 'E39A0B',
+  tierAmberSoft: 'FFF5DF',
   tierGreen: '2E7D32',
+  tierGreenSoft: 'EAF5EB',
+  swotBlue: '1565C0',
+  swotBlueSoft: 'E8F0FB',
   neutralGray: '9AA39E',
+  lightOff: '4A4F4C',
+  lightCase: '2B2F2D',
 };
 
 const FONT = 'Arial';
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
-const MARGIN = 0.6;
-const CONTENT_W = SLIDE_W - MARGIN * 2;
-const CONTENT_TOP = 1.55;
-const CONTENT_BOTTOM = 6.85;
+const SIDEBAR_W = 0.85;
+const X0 = 1.3;
+const RIGHT = SLIDE_W - 0.6;
+const CONTENT_W = RIGHT - X0;
+const CONTENT_TOP = 1.85;
+const CONTENT_BOTTOM = 6.9;
 
-const footerLabels = new WeakMap<PptxGenJS, string>();
+interface ReportTheme {
+  accent: string;
+  dark: string;
+  soft: string;
+  tint: string;
+  footer: string;
+  initials: string;
+}
+
+const themes = new WeakMap<PptxGenJS, ReportTheme>();
+
+function theme(pptx: PptxGenJS): ReportTheme {
+  return (
+    themes.get(pptx) ?? {
+      accent: REPORT_COLORS.brand,
+      dark: mix(REPORT_COLORS.brand, '000000', 0.3),
+      soft: mix(REPORT_COLORS.brand, 'FFFFFF', 0.85),
+      tint: mix(REPORT_COLORS.brand, 'FFFFFF', 0.94),
+      footer: 'Plataforma de evaluación',
+      initials: '',
+    }
+  );
+}
+
+/** Mezcla dos colores hex; `ratio` es la proporción del segundo. */
+export function mix(from: string, to: string, ratio: number): string {
+  const a = parseInt(from, 16);
+  const b = parseInt(to, 16);
+  const channel = (shift: number) => {
+    const x = (a >> shift) & 0xff;
+    const y = (b >> shift) & 0xff;
+    return Math.round(x + (y - x) * ratio);
+  };
+  return [16, 8, 0]
+    .map((s) => channel(s).toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+// ── Escala ───────────────────────────────────────────────────────────────
+
+/** Puntaje de 0 a 10 llevado a porcentaje entero. */
+export function scorePct(score: number): number {
+  return Math.round(Math.max(0, Math.min(10, score)) * 10);
+}
+
+export function pctLabel(score: number): string {
+  return `${scorePct(score)} %`;
+}
 
 export function tierColor(score: number, lowMax = 5, mediumMax = 7): string {
   if (score <= lowMax) return REPORT_COLORS.tierRed;
   if (score < mediumMax) return REPORT_COLORS.tierAmber;
   return REPORT_COLORS.tierGreen;
 }
+
+function tierSoft(score: number): string {
+  if (score <= 5) return REPORT_COLORS.tierRedSoft;
+  if (score < 7) return REPORT_COLORS.tierAmberSoft;
+  return REPORT_COLORS.tierGreenSoft;
+}
+
+export function tierLevel(score: number): 'Bajo' | 'Medio' | 'Alto' {
+  if (score <= 5) return 'Bajo';
+  if (score < 7) return 'Medio';
+  return 'Alto';
+}
+
+// ── Utilidades de texto ──────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('es-EC', {
@@ -59,8 +132,13 @@ function formatMonth(date: Date): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+function truncate(text: string | null | undefined, max: number): string {
+  const value = text ?? '';
+  return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
+}
+
+function isDate(d: unknown): d is Date {
+  return d instanceof Date && !isNaN(d.getTime());
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -77,10 +155,13 @@ function fitFontSize(
   h: number,
   max: number,
   min: number,
+  /** Ancho medio de un carácter en em: 0,46 para texto, más para negritas grandes. */
+  charEm = 0.46,
+  lineEm = 1.25,
 ): number {
   for (let size = max; size > min; size -= 0.5) {
-    const charW = (size / 72) * 0.5;
-    const lineH = (size / 72) * 1.35;
+    const charW = (size / 72) * charEm;
+    const lineH = (size / 72) * lineEm;
     const perLine = Math.max(1, Math.floor(w / charW));
     const lines = text
       .split('\n')
@@ -90,7 +171,24 @@ function fitFontSize(
   return min;
 }
 
-export function createReportPptx(footerLabel?: string): PptxGenJS {
+function initialsOf(name: string): string {
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !/^(de|del|la|las|los|y|el)$/i.test(w));
+  const letters = words
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
+  return letters || name.slice(0, 2).toUpperCase();
+}
+
+// ── Presentación y marco de cada lámina ──────────────────────────────────
+
+export function createReportPptx(
+  footerLabel?: string,
+  opts?: { accentColor?: string; orgName?: string },
+): PptxGenJS {
   const pptx = new PptxGenJSCtor();
   pptx.defineLayout({
     name: 'ASSESSMENT_WIDE',
@@ -98,32 +196,77 @@ export function createReportPptx(footerLabel?: string): PptxGenJS {
     height: SLIDE_H,
   });
   pptx.layout = 'ASSESSMENT_WIDE';
-  footerLabels.set(pptx, footerLabel ?? 'Plataforma de evaluación');
+  const accent = (opts?.accentColor ?? REPORT_COLORS.brand).toUpperCase();
+  themes.set(pptx, {
+    accent,
+    dark: mix(accent, '000000', 0.3),
+    soft: mix(accent, 'FFFFFF', 0.85),
+    tint: mix(accent, 'FFFFFF', 0.94),
+    footer: footerLabel ?? 'Plataforma de evaluación',
+    initials: opts?.orgName ? initialsOf(opts.orgName) : '',
+  });
   return pptx;
 }
 
-function addFooter(pptx: PptxGenJS, slide: PptxGenJS.Slide): void {
-  slide.addShape(pptx.ShapeType.line, {
-    x: MARGIN,
-    y: SLIDE_H - 0.55,
-    w: CONTENT_W,
-    h: 0,
-    line: { color: REPORT_COLORS.rule, width: 0.75 },
+function addChrome(pptx: PptxGenJS, slide: PptxGenJS.Slide): void {
+  const t = theme(pptx);
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: SIDEBAR_W,
+    h: SLIDE_H,
+    fill: { color: t.accent },
+    line: { color: t.accent, width: 0 },
   });
-  slide.addText(footerLabels.get(pptx) ?? '', {
-    x: MARGIN,
-    y: SLIDE_H - 0.5,
-    w: CONTENT_W - 1,
+  if (t.initials) {
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: (SIDEBAR_W - 0.6) / 2,
+      y: 0.38,
+      w: 0.6,
+      h: 0.6,
+      fill: { color: REPORT_COLORS.white },
+      line: { color: REPORT_COLORS.white, width: 0 },
+    });
+    slide.addText(t.initials, {
+      x: (SIDEBAR_W - 0.6) / 2,
+      y: 0.38,
+      w: 0.6,
+      h: 0.6,
+      fontSize: 13,
+      bold: true,
+      color: t.accent,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+  }
+  slide.addText(String(new Date().getFullYear()), {
+    x: 0,
+    y: SLIDE_H - 0.6,
+    w: SIDEBAR_W,
     h: 0.3,
+    fontSize: 9,
+    color: REPORT_COLORS.white,
+    fontFace: FONT,
+    align: 'center',
+    margin: 0,
+  });
+  slide.addText(t.footer, {
+    x: X0,
+    y: SLIDE_H - 0.45,
+    w: CONTENT_W - 1,
+    h: 0.28,
     fontSize: 9,
     fontFace: FONT,
     color: REPORT_COLORS.muted,
+    margin: 0,
   });
   slide.slideNumber = {
-    x: SLIDE_W - MARGIN - 0.8,
-    y: SLIDE_H - 0.5,
+    x: RIGHT - 0.8,
+    y: SLIDE_H - 0.45,
     w: 0.8,
-    h: 0.3,
+    h: 0.28,
     fontSize: 9,
     fontFace: FONT,
     color: REPORT_COLORS.muted,
@@ -131,37 +274,91 @@ function addFooter(pptx: PptxGenJS, slide: PptxGenJS.Slide): void {
   };
 }
 
+interface SlideHeader {
+  kicker?: string;
+  title: string;
+  subtitle?: string;
+  badge?: { text: string; color: string; fill: string };
+}
+
 function newContentSlide(
   pptx: PptxGenJS,
-  title: string,
-  subtitle?: string,
+  header: SlideHeader,
 ): PptxGenJS.Slide {
+  const t = theme(pptx);
   const slide = pptx.addSlide();
   slide.background = { color: REPORT_COLORS.white };
-  slide.addText(title, {
-    x: MARGIN,
-    y: 0.42,
-    w: CONTENT_W,
+  addChrome(pptx, slide);
+  const titleW = header.badge ? CONTENT_W - 2.6 : CONTENT_W;
+  if (header.kicker) {
+    slide.addText(header.kicker.toUpperCase(), {
+      x: X0,
+      y: 0.38,
+      w: titleW,
+      h: 0.26,
+      fontSize: 10.5,
+      bold: true,
+      color: t.accent,
+      fontFace: FONT,
+      charSpacing: 2,
+      margin: 0,
+    });
+  }
+  slide.addText(header.title, {
+    x: X0,
+    y: 0.64,
+    w: titleW,
     h: 0.55,
-    fontSize: 24,
+    fontSize: fitFontSize(header.title, titleW, 0.55, 28, 16, 0.6),
     bold: true,
-    color: REPORT_COLORS.ink,
+    color: t.dark,
     fontFace: FONT,
+    valign: 'middle',
     margin: 0,
   });
-  if (subtitle) {
-    slide.addText(subtitle, {
-      x: MARGIN,
-      y: 0.98,
-      w: CONTENT_W,
-      h: 0.35,
-      fontSize: 13,
+  if (header.subtitle) {
+    slide.addText(header.subtitle, {
+      x: X0,
+      y: 1.2,
+      w: titleW,
+      h: 0.3,
+      fontSize: 12,
       color: REPORT_COLORS.muted,
       fontFace: FONT,
       margin: 0,
     });
   }
-  addFooter(pptx, slide);
+  if (header.badge) {
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: RIGHT - 2.3,
+      y: 0.68,
+      w: 2.3,
+      h: 0.46,
+      rectRadius: 0.23,
+      fill: { color: header.badge.fill },
+      line: { color: header.badge.color, width: 1 },
+    });
+    slide.addText(header.badge.text, {
+      x: RIGHT - 2.3,
+      y: 0.68,
+      w: 2.3,
+      h: 0.46,
+      fontSize: 12,
+      bold: true,
+      color: header.badge.color,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+  }
+  slide.addShape(pptx.ShapeType.line, {
+    x: X0,
+    y: 1.6,
+    w: CONTENT_W,
+    h: 0,
+    line: { color: REPORT_COLORS.rule, width: 0.75 },
+  });
   return slide;
 }
 
@@ -169,41 +366,12 @@ function pageTitle(title: string, index: number, total: number): string {
   return total > 1 ? `${title} (${index + 1} de ${total})` : title;
 }
 
-/** Leyenda de la escala de puntajes, igual en todas las láminas que la usan. */
-function addScaleLegend(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  x: number,
-  y: number,
-): void {
-  const items: Array<[string, string]> = [
-    [REPORT_COLORS.tierRed, 'Bajo: 5 o menos'],
-    [REPORT_COLORS.tierAmber, 'Medio: más de 5 y menos de 7'],
-    [REPORT_COLORS.tierGreen, 'Alto: 7 o más'],
-  ];
-  let cx = x;
-  for (const [color, label] of items) {
-    slide.addShape(pptx.ShapeType.rect, {
-      x: cx,
-      y: y + 0.07,
-      w: 0.16,
-      h: 0.16,
-      fill: { color },
-      line: { color, width: 0 },
-    });
-    slide.addText(label, {
-      x: cx + 0.22,
-      y,
-      w: 2.9,
-      h: 0.3,
-      fontSize: 10.5,
-      color: REPORT_COLORS.body,
-      fontFace: FONT,
-      margin: 0,
-      valign: 'middle',
-    });
-    cx += 0.22 + label.length * 0.085 + 0.45;
-  }
+function levelBadge(score: number) {
+  return {
+    text: `Nivel ${tierLevel(score).toLowerCase()}`,
+    color: tierColor(score),
+    fill: tierSoft(score),
+  };
 }
 
 // ── Portada ──────────────────────────────────────────────────────────────
@@ -216,274 +384,215 @@ export function addCoverSlide(
     subtitle: string;
     status: string;
     date: string;
+    place?: string;
   },
 ): void {
+  const t = theme(pptx);
   const slide = pptx.addSlide();
-  slide.background = { color: REPORT_COLORS.white };
+  slide.background = { color: t.dark };
+  // Círculos de fondo en el color de la herramienta, como motivo de portada.
+  slide.addShape(pptx.ShapeType.ellipse, {
+    x: 8.6,
+    y: -1.6,
+    w: 6.4,
+    h: 6.4,
+    fill: { color: t.accent, transparency: 55 },
+    line: { color: t.accent, width: 0, transparency: 100 },
+  });
+  slide.addShape(pptx.ShapeType.ellipse, {
+    x: 10.9,
+    y: 3.9,
+    w: 3.6,
+    h: 3.6,
+    fill: { color: t.accent, transparency: 70 },
+    line: { color: t.accent, width: 0, transparency: 100 },
+  });
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0,
-    y: 0,
-    w: 0.22,
-    h: SLIDE_H,
-    fill: { color: REPORT_COLORS.brand },
-    line: { color: REPORT_COLORS.brand, width: 0 },
+    x: 0.9,
+    y: 0.95,
+    w: 1.0,
+    h: 0.07,
+    fill: { color: t.soft },
+    line: { color: t.soft, width: 0 },
   });
   slide.addText(opts.tool.toUpperCase(), {
-    x: 1.1,
-    y: 2.2,
-    w: 10.5,
-    h: 0.4,
+    x: 0.9,
+    y: 1.2,
+    w: 8,
+    h: 0.35,
     fontSize: 14,
     bold: true,
-    color: REPORT_COLORS.brand,
+    color: t.soft,
     fontFace: FONT,
     charSpacing: 2,
     margin: 0,
   });
-  const nameSize = fitFontSize(opts.orgName, 11, 1.5, 40, 26);
-  const nameLines = Math.max(
-    1,
-    Math.ceil(opts.orgName.length / Math.floor(11 / ((nameSize / 72) * 0.5))),
-  );
-  const nameH = Math.min(1.5, nameLines * (nameSize / 72) * 1.3 + 0.1);
+  const nameSize = fitFontSize(opts.orgName, 9.5, 1.7, 44, 26);
+  const perLine = Math.max(1, Math.floor(9.5 / ((nameSize / 72) * 0.46)));
+  const nameLines = Math.max(1, Math.ceil(opts.orgName.length / perLine));
+  const nameH = Math.min(1.75, nameLines * (nameSize / 72) * 1.2 + 0.1);
   slide.addText(opts.orgName, {
-    x: 1.1,
-    y: 2.7,
-    w: 11,
+    x: 0.9,
+    y: 1.65,
+    w: 9.5,
     h: nameH,
     fontSize: nameSize,
     bold: true,
-    color: REPORT_COLORS.ink,
+    color: REPORT_COLORS.white,
     fontFace: FONT,
     valign: 'top',
     margin: 0,
   });
   slide.addText(opts.subtitle, {
-    x: 1.1,
-    y: 2.7 + nameH + 0.2,
-    w: 11,
+    x: 0.9,
+    y: 1.65 + nameH + 0.2,
+    w: 9.5,
     h: 0.5,
-    fontSize: 18,
-    color: REPORT_COLORS.body,
+    fontSize: 20,
+    color: t.soft,
     fontFace: FONT,
+    margin: 0,
+  });
+  slide.addText('PRESENTACIÓN DE RESULTADOS', {
+    x: 0.9,
+    y: 1.65 + nameH + 1.05,
+    w: 9.5,
+    h: 0.45,
+    fontSize: 18,
+    color: REPORT_COLORS.white,
+    fontFace: FONT,
+    charSpacing: 1,
     margin: 0,
   });
   slide.addShape(pptx.ShapeType.line, {
-    x: 1.1,
-    y: 5.85,
-    w: 11.6,
+    x: 0.9,
+    y: 5.75,
+    w: SLIDE_W - 1.8,
     h: 0,
+    line: { color: t.soft, width: 0.75, transparency: 50 },
+  });
+  const block = (
+    x: number,
+    label: string,
+    lines: string[],
+    align: 'left' | 'right',
+  ) => {
+    slide.addText(label, {
+      x,
+      y: 5.95,
+      w: 5.5,
+      h: 0.32,
+      fontSize: 13,
+      bold: true,
+      color: t.soft,
+      fontFace: FONT,
+      align,
+      margin: 0,
+    });
+    slide.addText(lines.join('\n'), {
+      x,
+      y: 6.3,
+      w: 5.5,
+      h: 0.6,
+      fontSize: 12,
+      color: REPORT_COLORS.white,
+      fontFace: FONT,
+      align,
+      valign: 'top',
+      margin: 0,
+    });
+  };
+  block(0.9, 'Estado de la evaluación', [opts.status], 'left');
+  block(
+    SLIDE_W - 0.9 - 5.5,
+    'Fecha y lugar',
+    [opts.date, opts.place ?? ''].filter(Boolean),
+    'right',
+  );
+}
+
+// ── Resultados globales: barras horizontales por sección ─────────────────
+
+export interface ResultCard {
+  label: string;
+  caption: string;
+  score?: number;
+  value?: string;
+  color?: string;
+  tag?: string;
+}
+
+export function addGlobalResultsSlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    subtitle?: string;
+    items: Array<{ label: string; score: number }>;
+    globalScore: number;
+    cards: ResultCard[];
+  },
+): void {
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle: opts.subtitle,
+  });
+  const panelY = CONTENT_TOP;
+  const panelH = 3.45;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: panelY,
+    w: CONTENT_W,
+    h: panelH,
+    rectRadius: 0.08,
+    fill: { color: REPORT_COLORS.panel },
     line: { color: REPORT_COLORS.rule, width: 0.75 },
   });
-  slide.addText(
-    [
-      {
-        text: 'Estado de la evaluación: ',
-        options: { color: REPORT_COLORS.muted },
-      },
-      { text: opts.status, options: { bold: true, color: REPORT_COLORS.ink } },
-      {
-        text: '      Fecha del reporte: ',
-        options: { color: REPORT_COLORS.muted },
-      },
-      { text: opts.date, options: { bold: true, color: REPORT_COLORS.ink } },
-    ],
-    {
-      x: 1.1,
-      y: 6.0,
-      w: 11.6,
-      h: 0.4,
-      fontSize: 12,
-      fontFace: FONT,
-      margin: 0,
-    },
-  );
-}
+  const labelW = 3.1;
+  const chartX = X0 + labelW + 0.35;
+  const chartW = RIGHT - 0.55 - chartX;
+  const plotTop = panelY + 0.42;
+  const plotBottom = panelY + panelH - 0.45;
+  const items = [...opts.items].sort((a, b) => b.score - a.score);
+  const rowH = (plotBottom - plotTop) / Math.max(items.length, 1);
+  const barH = Math.min(0.3, rowH * 0.58);
 
-// ── Velocímetro dibujado con formas ──────────────────────────────────────
-
-export type GaugeItem = { label: string; score: number; caption?: string };
-
-// Ángulos OOXML: 0° al este, creciendo en sentido horario. El semicírculo
-// superior va de 180° (puntaje 0) a 360° (puntaje 10). Cortes: rojo hasta 5,
-// amarillo hasta 7, verde desde 7, como en la aplicación.
-const GAUGE_ZONES: Array<[number, number, string]> = [
-  [180, 270, REPORT_COLORS.tierRed],
-  [270, 306, REPORT_COLORS.tierAmber],
-  [306, 0, REPORT_COLORS.tierGreen],
-];
-
-function drawGauge(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  opts: {
-    x: number;
-    y: number;
-    d: number;
-    score: number;
-    valueFontSize: number;
-  },
-): number {
-  const { x, y, d } = opts;
-  const cx = x + d / 2;
-  const cy = y + d / 2;
-  const score = Math.max(0, Math.min(10, opts.score));
-  for (const [from, to, color] of GAUGE_ZONES) {
-    slide.addShape(pptx.ShapeType.blockArc, {
+  for (let tick = 0; tick <= 100; tick += 10) {
+    const x = chartX + (tick / 100) * chartW;
+    slide.addShape(pptx.ShapeType.line, {
       x,
-      y,
-      w: d,
-      h: d,
-      angleRange: [from, to],
-      arcThicknessRatio: 0.16,
-      fill: { color },
-      line: { color, width: 0 },
+      y: plotTop - 0.05,
+      w: 0,
+      h: plotBottom - plotTop + 0.05,
+      line: {
+        color: tick === 0 ? REPORT_COLORS.neutralGray : REPORT_COLORS.rule,
+        width: tick === 0 ? 1 : 0.75,
+      },
+    });
+    slide.addText(`${tick}%`, {
+      x: x - 0.3,
+      y: plotBottom + 0.06,
+      w: 0.6,
+      h: 0.22,
+      fontSize: 9,
+      color: REPORT_COLORS.muted,
+      fontFace: FONT,
+      align: 'center',
+      margin: 0,
     });
   }
-  const theta = 180 + score * 18;
-  const rad = (theta * Math.PI) / 180;
-  const len = (d / 2) * 0.68;
-  const thickness = Math.max(0.03, d * 0.02);
-  slide.addShape(pptx.ShapeType.rect, {
-    x: cx + (len / 2) * Math.cos(rad) - len / 2,
-    y: cy + (len / 2) * Math.sin(rad) - thickness / 2,
-    w: len,
-    h: thickness,
-    rotate: theta,
-    fill: { color: REPORT_COLORS.ink },
-    line: { color: REPORT_COLORS.ink, width: 0 },
-  });
-  const pivot = Math.max(0.08, d * 0.06);
-  slide.addShape(pptx.ShapeType.ellipse, {
-    x: cx - pivot / 2,
-    y: cy - pivot / 2,
-    w: pivot,
-    h: pivot,
-    fill: { color: REPORT_COLORS.ink },
-    line: { color: REPORT_COLORS.ink, width: 0 },
-  });
-  const valueH = opts.valueFontSize / 50;
-  slide.addText(score.toFixed(1), {
-    x,
-    y: cy + pivot * 0.7,
-    w: d,
-    h: valueH,
-    fontSize: opts.valueFontSize,
-    bold: true,
-    align: 'center',
-    color: tierColor(score),
-    fontFace: FONT,
-    margin: 0,
-  });
-  return cy + pivot * 0.7 + valueH;
-}
 
-/** Velocímetros por sección, en una cuadrícula de hasta 3 × 2 por lámina. */
-export function addGaugeSlide(
-  pptx: PptxGenJS,
-  opts: { title: string; subtitle?: string; items: GaugeItem[] },
-): void {
-  const pages = chunk(opts.items, 6);
-  pages.forEach((items, page) => {
-    const slide = newContentSlide(
-      pptx,
-      pageTitle(opts.title, page, pages.length),
-      opts.subtitle,
-    );
-    const cols =
-      items.length === 4 ? 2 : Math.min(3, Math.max(1, items.length));
-    const cellW = CONTENT_W / cols;
-    const rows = Math.ceil(items.length / cols);
-    const cellH = (CONTENT_BOTTOM - 0.45 - CONTENT_TOP) / Math.max(rows, 1);
-    const d = Math.min(2.3, cellW - 1, cellH - 0.9);
-    items.forEach((item, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const x = MARGIN + col * cellW;
-      const y = CONTENT_TOP + row * cellH;
-      const bottom = drawGauge(pptx, slide, {
-        x: x + (cellW - d) / 2,
-        y: y + 0.05,
-        d,
-        score: item.score,
-        valueFontSize: 22,
-      });
-      slide.addText(item.label, {
-        x: x + 0.2,
-        y: bottom + 0.02,
-        w: cellW - 0.4,
-        h: 0.6,
-        fontSize: 12,
-        color: REPORT_COLORS.ink,
-        fontFace: FONT,
-        align: 'center',
-        valign: 'top',
-        margin: 0,
-      });
-    });
-    addScaleLegend(pptx, slide, MARGIN, CONTENT_BOTTOM - 0.3);
-  });
-}
-
-// ── Resumen ejecutivo ────────────────────────────────────────────────────
-
-export function addExecutiveSummarySlide(
-  pptx: PptxGenJS,
-  opts: {
-    title: string;
-    globalScore: number;
-    level: string;
-    facts: Array<{ label: string; value: string }>;
-    narrative?: string;
-  },
-): void {
-  const slide = newContentSlide(pptx, opts.title);
-  const leftW = 4.1;
-
-  // Columna izquierda: puntaje global y cifras clave.
-  const bottom = drawGauge(pptx, slide, {
-    x: MARGIN + (leftW - 2.6) / 2,
-    y: CONTENT_TOP + 0.05,
-    d: 2.6,
-    score: opts.globalScore,
-    valueFontSize: 34,
-  });
-  slide.addText(`Puntaje global · ${opts.level}`, {
-    x: MARGIN,
-    y: bottom,
-    w: leftW,
-    h: 0.35,
-    fontSize: 13,
-    bold: true,
-    color: REPORT_COLORS.ink,
-    fontFace: FONT,
-    align: 'center',
-    margin: 0,
-  });
-  const factsY = bottom + 0.55;
-  const factH = Math.min(
-    0.48,
-    (CONTENT_BOTTOM - factsY) / Math.max(opts.facts.length, 1),
-  );
-  opts.facts.forEach((fact, i) => {
-    const y = factsY + i * factH;
-    slide.addText(fact.label, {
-      x: MARGIN,
+  items.forEach((item, i) => {
+    const y = plotTop + i * rowH;
+    const pct = scorePct(item.score);
+    const color = tierColor(item.score);
+    slide.addText(item.label, {
+      x: X0 + 0.2,
       y,
-      w: leftW - 1.1,
-      h: factH,
-      fontSize: 12.5,
-      color: REPORT_COLORS.body,
-      fontFace: FONT,
-      valign: 'middle',
-      margin: 0,
-    });
-    slide.addText(fact.value, {
-      x: MARGIN + leftW - 1.1,
-      y,
-      w: 1.1,
-      h: factH,
-      fontSize: 15,
+      w: labelW,
+      h: rowH,
+      fontSize: fitFontSize(item.label, labelW, rowH, 11.5, 8.5),
       bold: true,
       color: REPORT_COLORS.ink,
       fontFace: FONT,
@@ -491,209 +600,684 @@ export function addExecutiveSummarySlide(
       valign: 'middle',
       margin: 0,
     });
-    slide.addShape(pptx.ShapeType.line, {
-      x: MARGIN,
-      y: y + factH,
-      w: leftW,
-      h: 0,
-      line: { color: REPORT_COLORS.rule, width: 0.75 },
+    const w = Math.max(0.05, (pct / 100) * chartW);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: chartX,
+      y: y + (rowH - barH) / 2,
+      w,
+      h: barH,
+      rectRadius: Math.min(0.06, barH / 2),
+      fill: { color },
+      line: { color, width: 0 },
+    });
+    slide.addText(`${pct} %`, {
+      x: chartX + w + 0.06,
+      y,
+      w: 0.7,
+      h: rowH,
+      fontSize: 10.5,
+      bold: true,
+      color,
+      fontFace: FONT,
+      valign: 'middle',
+      margin: 0,
     });
   });
 
-  // Columna derecha: la síntesis en texto.
-  const rightX = MARGIN + leftW + 0.6;
-  const rightW = SLIDE_W - MARGIN - rightX;
+  // Promedio global: línea y etiqueta sobre el gráfico.
+  const avg = scorePct(opts.globalScore);
+  const avgX = chartX + (avg / 100) * chartW;
   slide.addShape(pptx.ShapeType.line, {
-    x: rightX - 0.3,
-    y: CONTENT_TOP,
+    x: avgX,
+    y: plotTop - 0.05,
     w: 0,
-    h: CONTENT_BOTTOM - CONTENT_TOP,
-    line: { color: REPORT_COLORS.rule, width: 0.75 },
+    h: plotBottom - plotTop + 0.05,
+    line: { color: REPORT_COLORS.ink, width: 1.25, dashType: 'dash' },
   });
-  slide.addText('Síntesis', {
-    x: rightX,
-    y: CONTENT_TOP,
-    w: rightW,
-    h: 0.4,
-    fontSize: 15,
+  const pillW = 2.1;
+  const pillX = Math.min(
+    Math.max(avgX - pillW / 2, chartX),
+    RIGHT - pillW - 0.1,
+  );
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: pillX,
+    y: panelY + 0.08,
+    w: pillW,
+    h: 0.28,
+    rectRadius: 0.14,
+    fill: { color: REPORT_COLORS.ink },
+    line: { color: REPORT_COLORS.ink, width: 0 },
+  });
+  slide.addText(`Promedio global: ${avg} %`, {
+    x: pillX,
+    y: panelY + 0.08,
+    w: pillW,
+    h: 0.28,
+    fontSize: 10,
     bold: true,
-    color: REPORT_COLORS.brand,
+    color: REPORT_COLORS.white,
     fontFace: FONT,
+    align: 'center',
+    valign: 'middle',
     margin: 0,
   });
-  const text =
-    opts.narrative?.trim() ||
-    'Esta evaluación no tiene una síntesis redactada. Las láminas siguientes presentan los puntajes, los indicadores críticos y el plan de acción.';
-  const textH = CONTENT_BOTTOM - CONTENT_TOP - 0.5;
-  slide.addText(text, {
-    x: rightX,
-    y: CONTENT_TOP + 0.5,
-    w: rightW,
-    h: textH,
-    fontSize: fitFontSize(text, rightW, textH, 15, 10.5),
-    color: REPORT_COLORS.body,
+
+  addResultCards(pptx, slide, opts.cards, panelY + panelH + 0.25);
+}
+
+function addResultCards(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  cards: ResultCard[],
+  y: number,
+): void {
+  const t = theme(pptx);
+  const gap = 0.25;
+  const n = Math.max(cards.length, 1);
+  const w = (CONTENT_W - gap * (n - 1)) / n;
+  const h = CONTENT_BOTTOM - y;
+  cards.forEach((card, i) => {
+    const x = X0 + i * (w + gap);
+    const color =
+      card.color ??
+      (card.score !== undefined ? tierColor(card.score) : t.accent);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x,
+      y,
+      w,
+      h,
+      rectRadius: 0.08,
+      fill: { color: REPORT_COLORS.white },
+      line: { color: REPORT_COLORS.rule, width: 0.75 },
+      shadow: {
+        type: 'outer',
+        color: '000000',
+        opacity: 0.12,
+        blur: 4,
+        offset: 1,
+        angle: 90,
+      },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: x + 0.12,
+      y,
+      w: w - 0.24,
+      h: 0.06,
+      fill: { color },
+      line: { color, width: 0 },
+    });
+    if (card.tag) {
+      slide.addText(card.tag, {
+        x: x + w - 1.15,
+        y: y + 0.2,
+        w: 1.0,
+        h: 0.26,
+        fontSize: 9,
+        bold: true,
+        color,
+        fontFace: FONT,
+        align: 'right',
+        margin: 0,
+      });
+    }
+    slide.addText(
+      card.value ??
+        (card.score !== undefined ? `${scorePct(card.score)} %` : '—'),
+      {
+        x: x + 0.2,
+        y: y + 0.2,
+        w: w - 1.3,
+        h: 0.55,
+        fontSize: 26,
+        bold: true,
+        color,
+        fontFace: FONT,
+        valign: 'middle',
+        margin: 0,
+      },
+    );
+    slide.addText(
+      [
+        {
+          text: card.label,
+          options: { bold: true, color: REPORT_COLORS.ink, breakLine: true },
+        },
+        { text: card.caption, options: { color: REPORT_COLORS.muted } },
+      ],
+      {
+        x: x + 0.2,
+        y: y + 0.8,
+        w: w - 0.4,
+        h: h - 0.9,
+        fontSize: fitFontSize(
+          `${card.label}\n${card.caption}`,
+          w - 0.4,
+          h - 0.9,
+          11,
+          8.5,
+        ),
+        fontFace: FONT,
+        valign: 'top',
+        margin: 0,
+      },
+    );
+  });
+}
+
+// ── Lectura ejecutiva y fortalezas/brechas ───────────────────────────────
+
+export interface InsightPoint {
+  title: string;
+  detail: string;
+}
+
+/** Lista de puntos con viñeta: "Título: detalle". */
+function addPointList(
+  slide: PptxGenJS.Slide,
+  points: InsightPoint[],
+  box: { x: number; y: number; w: number; h: number },
+  opts: { emptyText: string; maxFont?: number; minFont?: number },
+): void {
+  if (points.length === 0) {
+    slide.addText(opts.emptyText, {
+      ...box,
+      fontSize: 11.5,
+      italic: true,
+      color: REPORT_COLORS.muted,
+      fontFace: FONT,
+      valign: 'top',
+      margin: 0,
+    });
+    return;
+  }
+  const plain = points
+    .map((p) => (p.title ? `${p.title}: ${p.detail}` : p.detail))
+    .join('\n');
+  const size = fitFontSize(
+    plain,
+    box.w - 0.25,
+    box.h - 0.07 * points.length,
+    opts.maxFont ?? 13,
+    opts.minFont ?? 9.5,
+    0.42,
+    1.15,
+  );
+  const runs: PptxGenJS.TextProps[] = [];
+  points.forEach((p, i) => {
+    const last = i === points.length - 1;
+    const para = {
+      bullet: { indent: 14 },
+      paraSpaceAfter: 5,
+    };
+    if (p.title) {
+      runs.push({
+        text: `${p.title}: `,
+        options: { ...para, bold: true, color: REPORT_COLORS.ink },
+      });
+      runs.push({
+        text: p.detail,
+        options: { color: REPORT_COLORS.body, breakLine: !last },
+      });
+    } else {
+      runs.push({
+        text: p.detail,
+        options: { ...para, color: REPORT_COLORS.body, breakLine: !last },
+      });
+    }
+  });
+  slide.addText(runs, {
+    ...box,
+    fontSize: size,
     fontFace: FONT,
     valign: 'top',
-    paraSpaceAfter: 6,
-    lineSpacingMultiple: 1.15,
     margin: 0,
   });
 }
 
-// ── Detalle por sección: barras horizontales con peso y conteos ──────────
-
-export type SectionRow = {
-  label: string;
-  weightPct: number;
-  score: number;
-  evaluated: number;
-  critical: number;
-};
-
-export function addSectionScoresSlide(
+function addPointsCard(
   pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
   opts: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
     title: string;
-    subtitle?: string;
-    sectionLabel: string;
-    rows: SectionRow[];
+    symbol: string;
+    color: string;
+    fill: string;
+    points: InsightPoint[];
+    emptyText: string;
   },
 ): void {
-  const pages = chunk(opts.rows, 8);
-  pages.forEach((rows, page) => {
-    const slide = newContentSlide(
-      pptx,
-      pageTitle(opts.title, page, pages.length),
-      opts.subtitle,
-    );
-    // Columnas: sección | peso | barra 0-10 | puntaje | KPI | críticos
-    const colX = {
-      label: MARGIN,
-      weight: MARGIN + 4.5,
-      bar: MARGIN + 5.5,
-      score: MARGIN + 10.1,
-      evaluated: MARGIN + 10.85,
-      critical: MARGIN + 11.5,
-    };
-    const barW = 4.3;
-    const headY = CONTENT_TOP;
-    const head = (
-      text: string,
-      x: number,
-      w: number,
-      align: 'left' | 'center' | 'right' = 'left',
-    ) =>
-      slide.addText(text, {
-        x,
-        y: headY,
-        w,
-        h: 0.3,
-        fontSize: 10.5,
-        bold: true,
-        color: REPORT_COLORS.muted,
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: opts.x,
+    y: opts.y,
+    w: opts.w,
+    h: opts.h,
+    rectRadius: 0.08,
+    fill: { color: opts.fill },
+    line: { color: opts.fill, width: 0 },
+  });
+  slide.addShape(pptx.ShapeType.rect, {
+    x: opts.x + 0.15,
+    y: opts.y,
+    w: opts.w - 0.3,
+    h: 0.06,
+    fill: { color: opts.color },
+    line: { color: opts.color, width: 0 },
+  });
+  slide.addShape(pptx.ShapeType.ellipse, {
+    x: opts.x + 0.3,
+    y: opts.y + 0.3,
+    w: 0.46,
+    h: 0.46,
+    fill: { color: opts.color },
+    line: { color: opts.color, width: 0 },
+  });
+  slide.addText(opts.symbol, {
+    x: opts.x + 0.3,
+    y: opts.y + 0.3,
+    w: 0.46,
+    h: 0.46,
+    fontSize: 16,
+    bold: true,
+    color: REPORT_COLORS.white,
+    fontFace: FONT,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+  slide.addText(opts.title, {
+    x: opts.x + 0.9,
+    y: opts.y + 0.3,
+    w: opts.w - 1.1,
+    h: 0.46,
+    fontSize: 16,
+    bold: true,
+    color: opts.color,
+    fontFace: FONT,
+    valign: 'middle',
+    margin: 0,
+  });
+  slide.addShape(pptx.ShapeType.line, {
+    x: opts.x + 0.3,
+    y: opts.y + 0.95,
+    w: opts.w - 0.6,
+    h: 0,
+    line: { color: mix(opts.color, 'FFFFFF', 0.7), width: 0.75 },
+  });
+  addPointList(
+    slide,
+    opts.points,
+    {
+      x: opts.x + 0.3,
+      y: opts.y + 1.1,
+      w: opts.w - 0.6,
+      h: opts.h - 1.25,
+    },
+    { emptyText: opts.emptyText },
+  );
+}
+
+export function addExecutiveReadingSlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    strengths: InsightPoint[];
+    gaps: InsightPoint[];
+    closingTitle: string;
+    closing: string;
+    globalScore: number;
+  },
+): void {
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    badge: levelBadge(opts.globalScore),
+  });
+  const gap = 0.3;
+  const colW = (CONTENT_W - gap) / 2;
+  const cardsH = 3.35;
+  addPointsCard(pptx, slide, {
+    x: X0,
+    y: CONTENT_TOP,
+    w: colW,
+    h: cardsH,
+    title: 'Fortalezas principales',
+    symbol: '+',
+    color: REPORT_COLORS.tierGreen,
+    fill: REPORT_COLORS.tierGreenSoft,
+    points: opts.strengths,
+    emptyText: 'No hay fortalezas destacadas todavía.',
+  });
+  addPointsCard(pptx, slide, {
+    x: X0 + colW + gap,
+    y: CONTENT_TOP,
+    w: colW,
+    h: cardsH,
+    title: 'Brechas críticas',
+    symbol: '!',
+    color: REPORT_COLORS.tierRed,
+    fill: REPORT_COLORS.tierRedSoft,
+    points: opts.gaps,
+    emptyText: 'No hay brechas críticas en esta evaluación.',
+  });
+  const boxY = CONTENT_TOP + cardsH + 0.25;
+  const boxH = CONTENT_BOTTOM - boxY;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: boxY,
+    w: CONTENT_W,
+    h: boxH,
+    rectRadius: 0.08,
+    fill: { color: REPORT_COLORS.tierAmberSoft },
+    line: { color: REPORT_COLORS.tierAmberSoft, width: 0 },
+  });
+  slide.addText(opts.closingTitle, {
+    x: X0 + 0.35,
+    y: boxY + 0.15,
+    w: CONTENT_W - 0.7,
+    h: 0.32,
+    fontSize: 13,
+    bold: true,
+    color: REPORT_COLORS.tierAmber,
+    fontFace: FONT,
+    margin: 0,
+  });
+  const textH = boxH - 0.55;
+  slide.addText(opts.closing, {
+    x: X0 + 0.35,
+    y: boxY + 0.48,
+    w: CONTENT_W - 0.7,
+    h: textH,
+    fontSize: fitFontSize(opts.closing, CONTENT_W - 0.7, textH, 13.5, 9.5),
+    color: REPORT_COLORS.ink,
+    fontFace: FONT,
+    valign: 'top',
+    margin: 0,
+  });
+}
+
+// ── Una lámina por sección: avance, fortalezas, brechas y semáforo ───────
+
+function drawTrafficLight(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  x: number,
+  y: number,
+  score: number,
+): void {
+  const w = 0.66;
+  const d = 0.4;
+  const h = d * 3 + 0.4;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x,
+    y,
+    w,
+    h,
+    rectRadius: 0.14,
+    fill: { color: REPORT_COLORS.lightCase },
+    line: { color: REPORT_COLORS.lightCase, width: 0 },
+  });
+  const level = tierLevel(score);
+  const lights: Array<[string, string]> = [
+    ['Bajo', REPORT_COLORS.tierRed],
+    ['Medio', 'F2C200'],
+    ['Alto', REPORT_COLORS.tierGreen],
+  ];
+  lights.forEach(([name, color], i) => {
+    const on = name === level;
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: x + (w - d) / 2,
+      y: y + 0.12 + i * (d + 0.08),
+      w: d,
+      h: d,
+      fill: { color: on ? color : mix(color, REPORT_COLORS.lightOff, 0.72) },
+      line: { color: on ? color : REPORT_COLORS.lightOff, width: 0.5 },
+    });
+  });
+}
+
+export function addSectionDetailSlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    subtitle?: string;
+    score: number;
+    strengths: InsightPoint[];
+    gaps: InsightPoint[];
+    facts: Array<{ label: string; value: string }>;
+    note?: string;
+  },
+): void {
+  const t = theme(pptx);
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle: opts.subtitle,
+    badge: levelBadge(opts.score),
+  });
+  const pct = scorePct(opts.score);
+  const color = tierColor(opts.score);
+
+  // Avance hacia la meta del 100 %.
+  const trackY = 2.08;
+  slide.addText('0 %', {
+    x: X0,
+    y: 1.78,
+    w: 1,
+    h: 0.24,
+    fontSize: 9.5,
+    color: REPORT_COLORS.muted,
+    fontFace: FONT,
+    margin: 0,
+  });
+  slide.addText('Meta: 100 %', {
+    x: RIGHT - 2,
+    y: 1.78,
+    w: 2,
+    h: 0.24,
+    fontSize: 9.5,
+    bold: true,
+    color: REPORT_COLORS.muted,
+    fontFace: FONT,
+    align: 'right',
+    margin: 0,
+  });
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: trackY,
+    w: CONTENT_W,
+    h: 0.2,
+    rectRadius: 0.1,
+    fill: { color: REPORT_COLORS.track },
+    line: { color: REPORT_COLORS.track, width: 0 },
+  });
+  const fillW = Math.max(0.2, (pct / 100) * CONTENT_W);
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: trackY,
+    w: fillW,
+    h: 0.2,
+    rectRadius: 0.1,
+    fill: { color },
+    line: { color, width: 0 },
+  });
+  const pillW = 1.35;
+  const pillX = Math.min(Math.max(X0, X0 + fillW - pillW), RIGHT - pillW);
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: pillX,
+    y: trackY + 0.27,
+    w: pillW,
+    h: 0.28,
+    rectRadius: 0.14,
+    fill: { color },
+    line: { color, width: 0 },
+  });
+  slide.addText(`${pct} % actual`, {
+    x: pillX,
+    y: trackY + 0.27,
+    w: pillW,
+    h: 0.28,
+    fontSize: 10,
+    bold: true,
+    color: REPORT_COLORS.white,
+    fontFace: FONT,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+
+  const top = 2.75;
+  const h = CONTENT_BOTTOM - top;
+  const gap = 0.25;
+  const cardW = 3.35;
+  const colW = (CONTENT_W - cardW - gap * 2) / 2;
+  addPointsCard(pptx, slide, {
+    x: X0,
+    y: top,
+    w: colW,
+    h,
+    title: 'Fortalezas',
+    symbol: '+',
+    color: REPORT_COLORS.tierGreen,
+    fill: REPORT_COLORS.tierGreenSoft,
+    points: opts.strengths,
+    emptyText: 'Ningún KPI de esta sección alcanza todavía un nivel alto.',
+  });
+  addPointsCard(pptx, slide, {
+    x: X0 + colW + gap,
+    y: top,
+    w: colW,
+    h,
+    title: 'Brechas',
+    symbol: '!',
+    color: REPORT_COLORS.tierAmber,
+    fill: REPORT_COLORS.tierAmberSoft,
+    points: opts.gaps,
+    emptyText: 'Todos los KPI de esta sección tienen un nivel alto.',
+  });
+
+  // Tarjeta del semáforo.
+  const cx = RIGHT - cardW;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: cx,
+    y: top,
+    w: cardW,
+    h,
+    rectRadius: 0.08,
+    fill: { color: REPORT_COLORS.white },
+    line: { color: REPORT_COLORS.rule, width: 0.75 },
+  });
+  slide.addText('Índice de desempeño', {
+    x: cx,
+    y: top + 0.15,
+    w: cardW,
+    h: 0.28,
+    fontSize: 10.5,
+    bold: true,
+    color: REPORT_COLORS.muted,
+    fontFace: FONT,
+    align: 'center',
+    margin: 0,
+  });
+  drawTrafficLight(pptx, slide, cx + 0.35, top + 0.5, opts.score);
+  slide.addText(`${pct} %`, {
+    x: cx + 1.3,
+    y: top + 0.55,
+    w: cardW - 1.4,
+    h: 0.75,
+    fontSize: 34,
+    bold: true,
+    color,
+    fontFace: FONT,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+  slide.addText(
+    tierLevel(opts.score) === 'Alto'
+      ? 'Satisfactorio'
+      : tierLevel(opts.score) === 'Medio'
+        ? 'Requiere atención'
+        : 'Atención prioritaria',
+    {
+      x: cx + 1.3,
+      y: top + 1.3,
+      w: cardW - 1.4,
+      h: 0.32,
+      fontSize: 12,
+      bold: true,
+      color: REPORT_COLORS.body,
+      fontFace: FONT,
+      align: 'center',
+      margin: 0,
+    },
+  );
+  let fy = top + 2.22;
+  for (const fact of opts.facts) {
+    slide.addShape(pptx.ShapeType.line, {
+      x: cx + 0.25,
+      y: fy,
+      w: cardW - 0.5,
+      h: 0,
+      line: { color: REPORT_COLORS.rule, width: 0.5 },
+    });
+    slide.addText(fact.label, {
+      x: cx + 0.25,
+      y: fy + 0.03,
+      w: cardW - 1.3,
+      h: 0.32,
+      fontSize: 10.5,
+      color: REPORT_COLORS.body,
+      fontFace: FONT,
+      valign: 'middle',
+      margin: 0,
+    });
+    slide.addText(fact.value, {
+      x: cx + cardW - 1.05,
+      y: fy + 0.03,
+      w: 0.8,
+      h: 0.32,
+      fontSize: 11,
+      bold: true,
+      color: REPORT_COLORS.ink,
+      fontFace: FONT,
+      align: 'right',
+      valign: 'middle',
+      margin: 0,
+    });
+    fy += 0.33;
+  }
+  if (opts.note) {
+    const noteY = fy + 0.12;
+    const noteH = top + h - 0.18 - noteY;
+    if (noteH > 0.45) {
+      slide.addShape(pptx.ShapeType.roundRect, {
+        x: cx + 0.2,
+        y: noteY,
+        w: cardW - 0.4,
+        h: noteH,
+        rectRadius: 0.06,
+        fill: { color: t.tint },
+        line: { color: t.soft, width: 0.5 },
+      });
+      slide.addText(opts.note, {
+        x: cx + 0.32,
+        y: noteY + 0.06,
+        w: cardW - 0.64,
+        h: noteH - 0.12,
+        fontSize: fitFontSize(opts.note, cardW - 0.64, noteH - 0.12, 10.5, 8),
+        color: t.dark,
         fontFace: FONT,
-        align,
+        valign: 'middle',
         margin: 0,
       });
-    head(opts.sectionLabel, colX.label, 4.3);
-    head('Peso', colX.weight, 0.8, 'center');
-    head('Puntaje de 0 a 10', colX.bar, barW);
-    head('Nota', colX.score, 0.7, 'center');
-    head('KPI', colX.evaluated, 0.6, 'center');
-    head('Críticos', colX.critical, 0.75, 'center');
-    slide.addShape(pptx.ShapeType.line, {
-      x: MARGIN,
-      y: headY + 0.35,
-      w: CONTENT_W,
-      h: 0,
-      line: { color: REPORT_COLORS.ink, width: 1 },
-    });
-
-    const top = headY + 0.45;
-    const rowH = Math.min(
-      0.62,
-      (CONTENT_BOTTOM - 0.45 - top) / Math.max(rows.length, 1),
-    );
-    // Marcas de los cortes 5 y 7 sobre toda la columna de barras.
-    for (const mark of [5, 7]) {
-      slide.addShape(pptx.ShapeType.line, {
-        x: colX.bar + (mark / 10) * barW,
-        y: top,
-        w: 0,
-        h: rowH * rows.length,
-        line: { color: REPORT_COLORS.rule, width: 0.75, dashType: 'dash' },
-      });
     }
-    rows.forEach((row, i) => {
-      const y = top + i * rowH;
-      const color = tierColor(row.score);
-      const cell = (
-        text: string,
-        x: number,
-        w: number,
-        extra: Partial<PptxGenJS.TextPropsOptions> = {},
-      ) =>
-        slide.addText(text, {
-          x,
-          y,
-          w,
-          h: rowH,
-          fontSize: 12,
-          color: REPORT_COLORS.ink,
-          fontFace: FONT,
-          valign: 'middle',
-          margin: 0,
-          ...extra,
-        });
-      cell(row.label, colX.label, 4.3, {
-        fontSize: fitFontSize(row.label, 4.3, rowH - 0.05, 12, 9.5),
-      });
-      cell(`${row.weightPct} %`, colX.weight, 0.8, {
-        align: 'center',
-        color: REPORT_COLORS.body,
-      });
-      const barH = Math.min(0.26, rowH * 0.42);
-      slide.addShape(pptx.ShapeType.rect, {
-        x: colX.bar,
-        y: y + (rowH - barH) / 2,
-        w: barW,
-        h: barH,
-        fill: { color: REPORT_COLORS.panel },
-        line: { color: REPORT_COLORS.panel, width: 0 },
-      });
-      slide.addShape(pptx.ShapeType.rect, {
-        x: colX.bar,
-        y: y + (rowH - barH) / 2,
-        w: Math.max(0.02, (Math.max(0, Math.min(10, row.score)) / 10) * barW),
-        h: barH,
-        fill: { color },
-        line: { color, width: 0 },
-      });
-      cell(row.score.toFixed(1), colX.score, 0.7, {
-        align: 'center',
-        bold: true,
-        color,
-        fontSize: 13,
-      });
-      cell(String(row.evaluated), colX.evaluated, 0.6, {
-        align: 'center',
-        color: REPORT_COLORS.body,
-      });
-      cell(String(row.critical), colX.critical, 0.75, {
-        align: 'center',
-        bold: row.critical > 0,
-        color: row.critical > 0 ? REPORT_COLORS.tierRed : REPORT_COLORS.body,
-      });
-      slide.addShape(pptx.ShapeType.line, {
-        x: MARGIN,
-        y: y + rowH,
-        w: CONTENT_W,
-        h: 0,
-        line: { color: REPORT_COLORS.rule, width: 0.5 },
-      });
-    });
-    addScaleLegend(pptx, slide, MARGIN, CONTENT_BOTTOM - 0.3);
-  });
+  }
 }
 
 // ── Tabla genérica paginada ──────────────────────────────────────────────
@@ -714,13 +1298,106 @@ export interface TableColumn {
   align?: 'left' | 'center' | 'right';
 }
 
+/** Cifras en píldoras sobre una tabla o un gráfico. */
+function addChips(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  chips: Array<{ text: string; color?: string }>,
+  y: number,
+): void {
+  const t = theme(pptx);
+  let x = X0;
+  for (const chip of chips) {
+    const color = chip.color ?? t.dark;
+    const w = Math.min(4.5, 0.4 + chip.text.length * 0.085);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x,
+      y,
+      w,
+      h: 0.34,
+      rectRadius: 0.17,
+      fill: { color: mix(color, 'FFFFFF', 0.88) },
+      line: { color: mix(color, 'FFFFFF', 0.6), width: 0.5 },
+    });
+    slide.addText(chip.text, {
+      x,
+      y,
+      w,
+      h: 0.34,
+      fontSize: 11,
+      bold: true,
+      color,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+    x += w + 0.15;
+  }
+}
+
+function styledTable(
+  pptx: PptxGenJS,
+  slide: PptxGenJS.Slide,
+  opts: {
+    x: number;
+    y: number;
+    w: number;
+    columns: TableColumn[];
+    rows: TableCell[][];
+    fontSize?: number;
+  },
+): void {
+  const t = theme(pptx);
+  const totalWeight = opts.columns.reduce((s, c) => s + c.weight, 0);
+  const fontSize = opts.fontSize ?? 11;
+  const header = opts.columns.map((c) => ({
+    text: c.header,
+    options: {
+      bold: true,
+      color: REPORT_COLORS.white,
+      fill: { color: t.accent },
+      align: c.align ?? 'left',
+      fontSize: fontSize + 0.5,
+    },
+  }));
+  const body = opts.rows.map((row, r) =>
+    row.map((cell, c) => {
+      const value = typeof cell === 'string' ? { text: cell } : cell;
+      return {
+        text: value.text,
+        options: {
+          color: value.color ?? REPORT_COLORS.ink,
+          bold: value.bold ?? false,
+          align: value.align ?? opts.columns[c].align ?? 'left',
+          fill: { color: r % 2 === 1 ? t.tint : REPORT_COLORS.white },
+          fontSize,
+        },
+      };
+    }),
+  );
+  slide.addTable([header, ...body] as PptxGenJS.TableRow[], {
+    x: opts.x,
+    y: opts.y,
+    w: opts.w,
+    colW: opts.columns.map((c) => (c.weight / totalWeight) * opts.w),
+    fontFace: FONT,
+    valign: 'middle',
+    margin: [0.07, 0.1, 0.07, 0.1],
+    border: { type: 'solid', color: t.soft, pt: 0.75 },
+    autoPage: false,
+  });
+}
+
 /**
- * Tabla con encabezado verde, letra de 11 puntos y filas paginadas. Cada
- * lámina repite el encabezado. `summary` es una línea de contexto arriba.
+ * Tabla con encabezado en el color de la herramienta y filas alternas
+ * teñidas; cada lámina repite el encabezado. `summary` son cifras en
+ * píldoras sobre la tabla.
  */
 export function addTableSlide(
   pptx: PptxGenJS,
   opts: {
+    kicker?: string;
     title: string;
     subtitle?: string;
     summary?: Array<{ text: string; color?: string }>;
@@ -728,43 +1405,31 @@ export function addTableSlide(
     rows: TableCell[][];
     emptyText: string;
     rowsPerSlide?: number;
+    fontSize?: number;
   },
 ): void {
-  const totalWeight = opts.columns.reduce((s, c) => s + c.weight, 0);
-  const colW = opts.columns.map((c) => (c.weight / totalWeight) * CONTENT_W);
-  const pages = chunk(opts.rows, opts.rowsPerSlide ?? 8);
-
+  const fontSize = opts.fontSize ?? ((opts.rowsPerSlide ?? 8) > 8 ? 10 : 11);
+  const tableTop =
+    CONTENT_TOP + (opts.summary && opts.summary.length > 0 ? 0.55 : 0);
+  const pages = paginateRows(opts.columns, opts.rows, {
+    fontSize,
+    maxRows: opts.rowsPerSlide ?? 8,
+    height: CONTENT_BOTTOM - tableTop,
+  });
   pages.forEach((rows, page) => {
-    const slide = newContentSlide(
-      pptx,
-      pageTitle(opts.title, page, pages.length),
-      opts.subtitle,
-    );
+    const slide = newContentSlide(pptx, {
+      kicker: opts.kicker,
+      title: pageTitle(opts.title, page, pages.length),
+      subtitle: opts.subtitle,
+    });
     let y = CONTENT_TOP;
     if (opts.summary && opts.summary.length > 0) {
-      slide.addText(
-        opts.summary.flatMap((part, i) => [
-          ...(i > 0 ? [{ text: '     ', options: {} }] : []),
-          {
-            text: part.text,
-            options: { bold: true, color: part.color ?? REPORT_COLORS.ink },
-          },
-        ]),
-        {
-          x: MARGIN,
-          y,
-          w: CONTENT_W,
-          h: 0.35,
-          fontSize: 13,
-          fontFace: FONT,
-          margin: 0,
-        },
-      );
-      y += 0.5;
+      addChips(pptx, slide, opts.summary, y);
+      y += 0.55;
     }
     if (rows.length === 0) {
       slide.addText(opts.emptyText, {
-        x: MARGIN,
+        x: X0,
         y,
         w: CONTENT_W,
         h: 0.5,
@@ -775,95 +1440,125 @@ export function addTableSlide(
       });
       return;
     }
-    const header = opts.columns.map((c) => ({
-      text: c.header,
-      options: {
-        bold: true,
-        color: REPORT_COLORS.white,
-        fill: { color: REPORT_COLORS.brand },
-        align: c.align ?? 'left',
-        fontSize: 11.5,
-      },
-    }));
-    const body = rows.map((row, r) =>
-      row.map((cell, c) => {
-        const value = typeof cell === 'string' ? { text: cell } : cell;
-        return {
-          text: value.text,
-          options: {
-            color: value.color ?? REPORT_COLORS.ink,
-            bold: value.bold ?? false,
-            align: value.align ?? opts.columns[c].align ?? 'left',
-            fill: {
-              color: r % 2 === 1 ? REPORT_COLORS.panel : REPORT_COLORS.white,
-            },
-            fontSize: 11,
-          },
-        };
-      }),
-    );
-    slide.addTable([header, ...body] as PptxGenJS.TableRow[], {
-      x: MARGIN,
+    styledTable(pptx, slide, {
+      x: X0,
       y,
       w: CONTENT_W,
-      colW,
-      fontFace: FONT,
-      valign: 'middle',
-      margin: [0.06, 0.1, 0.06, 0.1],
-      border: { type: 'solid', color: REPORT_COLORS.rule, pt: 0.5 },
-      autoPage: false,
+      columns: opts.columns,
+      rows,
+      fontSize,
     });
   });
+}
+
+/**
+ * Reparte las filas en láminas según el alto estimado de cada una (las
+ * celdas largas ocupan varias líneas), sin pasar de `maxRows` por lámina.
+ */
+function paginateRows(
+  columns: TableColumn[],
+  rows: TableCell[][],
+  opts: { fontSize: number; maxRows: number; height: number },
+): TableCell[][][] {
+  const totalWeight = columns.reduce((s, c) => s + c.weight, 0);
+  const lineH = (opts.fontSize / 72) * 1.17;
+  const rowHeight = (row: TableCell[]) => {
+    const lines = row.reduce((max, cell, c) => {
+      const text = typeof cell === 'string' ? cell : cell.text;
+      const w = (columns[c].weight / totalWeight) * CONTENT_W - 0.2;
+      const perLine = Math.max(
+        1,
+        Math.floor(w / ((opts.fontSize / 72) * 0.44)),
+      );
+      const n = text
+        .split('\n')
+        .reduce(
+          (sum, p) => sum + Math.max(1, Math.ceil(p.length / perLine)),
+          0,
+        );
+      return Math.max(max, n);
+    }, 1);
+    return lines * lineH + 0.13;
+  };
+  const headerH = lineH * 2 + 0.16;
+  const pages: TableCell[][][] = [];
+  let current: TableCell[][] = [];
+  let used = headerH;
+  for (const row of rows) {
+    const h = rowHeight(row);
+    if (
+      current.length > 0 &&
+      (used + h > opts.height || current.length >= opts.maxRows)
+    ) {
+      pages.push(current);
+      current = [];
+      used = headerH;
+    }
+    current.push(row);
+    used += h;
+  }
+  pages.push(current);
+  return pages;
 }
 
 // ── Lista numerada (hallazgos y recomendaciones) ─────────────────────────
 
 export function addNumberedListSlide(
   pptx: PptxGenJS,
-  opts: { title: string; subtitle?: string; items: string[] },
+  opts: { kicker?: string; title: string; subtitle?: string; items: string[] },
 ): void {
-  const pages = chunk(opts.items, 6);
+  const t = theme(pptx);
+  const pages = chunk(opts.items, 5);
   pages.forEach((items, page) => {
-    const slide = newContentSlide(
-      pptx,
-      pageTitle(opts.title, page, pages.length),
-      opts.subtitle,
-    );
-    const rowH = (CONTENT_BOTTOM - CONTENT_TOP) / 6;
+    const slide = newContentSlide(pptx, {
+      kicker: opts.kicker,
+      title: pageTitle(opts.title, page, pages.length),
+      subtitle: opts.subtitle,
+    });
+    const rowH = (CONTENT_BOTTOM - CONTENT_TOP) / 5;
     items.forEach((item, i) => {
       const y = CONTENT_TOP + i * rowH;
-      slide.addText(String(page * 6 + i + 1), {
-        x: MARGIN,
-        y,
-        w: 0.6,
-        h: rowH,
-        fontSize: 22,
+      slide.addShape(pptx.ShapeType.roundRect, {
+        x: X0,
+        y: y + 0.06,
+        w: CONTENT_W,
+        h: rowH - 0.12,
+        rectRadius: 0.08,
+        fill: { color: i % 2 === 0 ? t.tint : REPORT_COLORS.white },
+        line: { color: t.soft, width: 0.5 },
+      });
+      slide.addShape(pptx.ShapeType.ellipse, {
+        x: X0 + 0.25,
+        y: y + (rowH - 0.52) / 2,
+        w: 0.52,
+        h: 0.52,
+        fill: { color: t.accent },
+        line: { color: t.accent, width: 0 },
+      });
+      slide.addText(String(page * 5 + i + 1), {
+        x: X0 + 0.25,
+        y: y + (rowH - 0.52) / 2,
+        w: 0.52,
+        h: 0.52,
+        fontSize: 16,
         bold: true,
-        color: REPORT_COLORS.brand,
+        color: REPORT_COLORS.white,
         fontFace: FONT,
+        align: 'center',
         valign: 'middle',
         margin: 0,
       });
       slide.addText(item, {
-        x: MARGIN + 0.75,
-        y,
-        w: CONTENT_W - 0.75,
-        h: rowH,
-        fontSize: fitFontSize(item, CONTENT_W - 0.75, rowH - 0.1, 15, 11),
+        x: X0 + 1.0,
+        y: y + 0.06,
+        w: CONTENT_W - 1.25,
+        h: rowH - 0.12,
+        fontSize: fitFontSize(item, CONTENT_W - 1.25, rowH - 0.2, 15, 10.5),
         color: REPORT_COLORS.ink,
         fontFace: FONT,
         valign: 'middle',
         margin: 0,
       });
-      if (i < items.length - 1) {
-        slide.addShape(pptx.ShapeType.line, {
-          x: MARGIN + 0.75,
-          y: y + rowH,
-          w: CONTENT_W - 0.75,
-          h: 0,
-          line: { color: REPORT_COLORS.rule, width: 0.5 },
-        });
-      }
     });
   });
 }
@@ -880,10 +1575,20 @@ export function addProportionBar(
     parts: Array<{ label: string; value: number; color: string }>;
   },
 ): void {
-  const total = opts.parts.reduce((s, p) => s + p.value, 0) || 1;
+  const total = opts.parts.reduce((s, p) => s + p.value, 0);
   let x = opts.x;
+  if (total === 0) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x,
+      y: opts.y,
+      w: opts.w,
+      h: 0.42,
+      fill: { color: REPORT_COLORS.track },
+      line: { color: REPORT_COLORS.track, width: 0 },
+    });
+  }
   for (const part of opts.parts) {
-    const w = (part.value / total) * opts.w;
+    const w = total > 0 ? (part.value / total) * opts.w : 0;
     if (w <= 0) continue;
     slide.addShape(pptx.ShapeType.rect, {
       x,
@@ -915,7 +1620,7 @@ export function addProportionBar(
       ...(i > 0 ? [{ text: '      ', options: {} }] : []),
       { text: '■ ', options: { color: part.color } },
       {
-        text: `${part.label}: ${part.value} (${Math.round((part.value / total) * 100)} %)`,
+        text: `${part.label}: ${part.value}${total > 0 ? ` (${Math.round((part.value / total) * 100)} %)` : ''}`,
         options: { color: REPORT_COLORS.body },
       },
     ]),
@@ -934,6 +1639,7 @@ export function addProportionBar(
 export function addClassificationSlide(
   pptx: PptxGenJS,
   opts: {
+    kicker?: string;
     title: string;
     subtitle?: string;
     totals: Array<{ label: string; value: number; color: string }>;
@@ -941,51 +1647,361 @@ export function addClassificationSlide(
     rows: TableCell[][];
   },
 ): void {
-  const slide = newContentSlide(pptx, opts.title, opts.subtitle);
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle: opts.subtitle,
+  });
   addProportionBar(pptx, slide, {
-    x: MARGIN,
+    x: X0,
     y: CONTENT_TOP,
     w: CONTENT_W,
     parts: opts.totals,
   });
-  const totalWeight = opts.columns.reduce((s, c) => s + c.weight, 0);
-  const header = opts.columns.map((c) => ({
-    text: c.header,
-    options: {
-      bold: true,
-      color: REPORT_COLORS.white,
-      fill: { color: REPORT_COLORS.brand },
-      align: c.align ?? 'left',
-      fontSize: 11.5,
-    },
-  }));
-  const body = opts.rows.map((row, r) =>
-    row.map((cell, c) => {
-      const value = typeof cell === 'string' ? { text: cell } : cell;
-      return {
-        text: value.text,
-        options: {
-          color: value.color ?? REPORT_COLORS.ink,
-          bold: value.bold ?? false,
-          align: value.align ?? opts.columns[c].align ?? 'left',
-          fill: {
-            color: r % 2 === 1 ? REPORT_COLORS.panel : REPORT_COLORS.white,
-          },
-          fontSize: 12,
-        },
-      };
-    }),
-  );
-  slide.addTable([header, ...body] as PptxGenJS.TableRow[], {
-    x: MARGIN,
+  styledTable(pptx, slide, {
+    x: X0,
     y: CONTENT_TOP + 1.05,
     w: CONTENT_W,
-    colW: opts.columns.map((c) => (c.weight / totalWeight) * CONTENT_W),
-    fontFace: FONT,
-    valign: 'middle',
-    margin: [0.08, 0.1, 0.08, 0.1],
-    border: { type: 'solid', color: REPORT_COLORS.rule, pt: 0.5 },
-    autoPage: false,
+    columns: opts.columns,
+    rows: opts.rows,
+    fontSize: 11.5,
+  });
+}
+
+// ── Resumen del plan de acción ───────────────────────────────────────────
+
+export type PlanMeasure = {
+  name: string;
+  kpi?: string;
+  responsible: string;
+  endDate: Date;
+  status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
+  progressPct: number;
+};
+
+export function addPlanSummarySlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    subtitle?: string;
+    measures: PlanMeasure[];
+    /** KPI críticos (o riesgos) que todavía no tienen medida. */
+    uncovered: { label: string; value: number };
+  },
+): void {
+  const t = theme(pptx);
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle: opts.subtitle,
+  });
+  const ms = opts.measures;
+  const count = (s: PlanMeasure['status']) =>
+    ms.filter((m) => m.status === s).length;
+  const avg =
+    ms.length === 0
+      ? 0
+      : Math.round(
+          ms.reduce(
+            (sum, m) => sum + Math.max(0, Math.min(100, m.progressPct ?? 0)),
+            0,
+          ) / ms.length,
+        );
+  const tiles: Array<{ label: string; value: string; color: string }> = [
+    { label: 'Medidas en el plan', value: String(ms.length), color: t.dark },
+    {
+      label: 'Concluidas',
+      value: String(count('DONE')),
+      color: REPORT_COLORS.tierGreen,
+    },
+    {
+      label: 'En progreso',
+      value: String(count('IN_PROGRESS')),
+      color: REPORT_COLORS.tierAmber,
+    },
+    {
+      label: 'Pendientes',
+      value: String(count('PENDING')),
+      color: REPORT_COLORS.muted,
+    },
+    {
+      label: opts.uncovered.label,
+      value: String(opts.uncovered.value),
+      color:
+        opts.uncovered.value > 0
+          ? REPORT_COLORS.tierRed
+          : REPORT_COLORS.tierGreen,
+    },
+  ];
+  const gap = 0.2;
+  const tileW = (CONTENT_W - gap * (tiles.length - 1)) / tiles.length;
+  tiles.forEach((tile, i) => {
+    const x = X0 + i * (tileW + gap);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x,
+      y: CONTENT_TOP,
+      w: tileW,
+      h: 1.15,
+      rectRadius: 0.08,
+      fill: { color: i === 0 ? t.tint : REPORT_COLORS.panel },
+      line: { color: i === 0 ? t.soft : REPORT_COLORS.rule, width: 0.75 },
+    });
+    slide.addText(tile.value, {
+      x,
+      y: CONTENT_TOP + 0.08,
+      w: tileW,
+      h: 0.6,
+      fontSize: 28,
+      bold: true,
+      color: tile.color,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+    slide.addText(tile.label, {
+      x: x + 0.1,
+      y: CONTENT_TOP + 0.68,
+      w: tileW - 0.2,
+      h: 0.4,
+      fontSize: fitFontSize(tile.label, tileW - 0.2, 0.4, 11, 8.5),
+      color: REPORT_COLORS.body,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'top',
+      margin: 0,
+    });
+  });
+
+  // Avance promedio del plan.
+  const barY = CONTENT_TOP + 1.45;
+  slide.addText(
+    [
+      {
+        text: 'Avance promedio del plan  ',
+        options: { bold: true, color: REPORT_COLORS.ink },
+      },
+      { text: `${avg} %`, options: { bold: true, color: t.accent } },
+    ],
+    {
+      x: X0,
+      y: barY,
+      w: CONTENT_W,
+      h: 0.3,
+      fontSize: 12,
+      fontFace: FONT,
+      margin: 0,
+    },
+  );
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: X0,
+    y: barY + 0.38,
+    w: CONTENT_W,
+    h: 0.2,
+    rectRadius: 0.1,
+    fill: { color: REPORT_COLORS.track },
+    line: { color: REPORT_COLORS.track, width: 0 },
+  });
+  if (avg > 0) {
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: X0,
+      y: barY + 0.38,
+      w: Math.max(0.2, (avg / 100) * CONTENT_W),
+      h: 0.2,
+      rectRadius: 0.1,
+      fill: { color: t.accent },
+      line: { color: t.accent, width: 0 },
+    });
+  }
+
+  const tableY = barY + 0.85;
+  if (ms.length === 0) {
+    slide.addText(
+      'Todavía no hay medidas registradas en el plan. Cada KPI crítico debería tener al menos una.',
+      {
+        x: X0,
+        y: tableY,
+        w: CONTENT_W,
+        h: 0.5,
+        fontSize: 13,
+        color: REPORT_COLORS.muted,
+        fontFace: FONT,
+        margin: 0,
+      },
+    );
+    return;
+  }
+  // Primero lo que vence antes y no está concluido.
+  const order = { IN_PROGRESS: 0, PENDING: 1, DONE: 2 } as const;
+  const shown = [...ms]
+    .sort(
+      (a, b) =>
+        order[a.status] - order[b.status] ||
+        (isDate(a.endDate) ? a.endDate.getTime() : 0) -
+          (isDate(b.endDate) ? b.endDate.getTime() : 0),
+    )
+    .slice(0, 6);
+  const statusMeta = MEASURE_STATUS_META;
+  styledTable(pptx, slide, {
+    x: X0,
+    y: tableY,
+    w: CONTENT_W,
+    columns: [
+      { header: 'Medida', weight: 4.6 },
+      { header: 'KPI', weight: 1 },
+      { header: 'Responsable', weight: 2 },
+      { header: 'Fin', weight: 1.3, align: 'center' },
+      { header: 'Estado', weight: 1.3, align: 'center' },
+      { header: 'Avance', weight: 1, align: 'center' },
+    ],
+    rows: shown.map((m) => [
+      truncate(m.name, 90),
+      m.kpi ?? '',
+      truncate(m.responsible, 40),
+      {
+        text: isDate(m.endDate) ? formatDate(m.endDate) : '—',
+        align: 'center',
+      },
+      {
+        text: statusMeta[m.status]?.label ?? m.status,
+        bold: true,
+        color: statusMeta[m.status]?.color,
+        align: 'center',
+      },
+      { text: `${m.progressPct ?? 0} %`, align: 'center' },
+    ]),
+    fontSize: 10.5,
+  });
+  if (ms.length > shown.length) {
+    slide.addText(
+      `Se muestran ${shown.length} de ${ms.length} medidas; el cronograma completo está en la lámina siguiente.`,
+      {
+        x: X0,
+        y: CONTENT_BOTTOM - 0.25,
+        w: CONTENT_W,
+        h: 0.25,
+        fontSize: 9.5,
+        italic: true,
+        color: REPORT_COLORS.muted,
+        fontFace: FONT,
+        margin: 0,
+      },
+    );
+  }
+}
+
+// ── FODA ─────────────────────────────────────────────────────────────────
+
+export function addSwotSlide(
+  pptx: PptxGenJS,
+  opts: {
+    kicker: string;
+    title: string;
+    subtitle?: string;
+    swot: {
+      strengths: string[];
+      weaknesses: string[];
+      opportunities: string[];
+      threats: string[];
+    };
+  },
+): void {
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle: opts.subtitle,
+  });
+  const gap = 0.22;
+  const w = (CONTENT_W - gap) / 2;
+  const h = (CONTENT_BOTTOM - CONTENT_TOP - gap) / 2;
+  const quadrants: Array<{
+    letter: string;
+    title: string;
+    items: string[];
+    color: string;
+    fill: string;
+  }> = [
+    {
+      letter: 'F',
+      title: 'Fortalezas',
+      items: opts.swot.strengths,
+      color: REPORT_COLORS.tierGreen,
+      fill: REPORT_COLORS.tierGreenSoft,
+    },
+    {
+      letter: 'O',
+      title: 'Oportunidades',
+      items: opts.swot.opportunities,
+      color: REPORT_COLORS.swotBlue,
+      fill: REPORT_COLORS.swotBlueSoft,
+    },
+    {
+      letter: 'D',
+      title: 'Debilidades',
+      items: opts.swot.weaknesses,
+      color: REPORT_COLORS.tierRed,
+      fill: REPORT_COLORS.tierRedSoft,
+    },
+    {
+      letter: 'A',
+      title: 'Amenazas',
+      items: opts.swot.threats,
+      color: REPORT_COLORS.tierAmber,
+      fill: REPORT_COLORS.tierAmberSoft,
+    },
+  ];
+  quadrants.forEach((q, i) => {
+    const x = X0 + (i % 2) * (w + gap);
+    const y = CONTENT_TOP + Math.floor(i / 2) * (h + gap);
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x,
+      y,
+      w,
+      h,
+      rectRadius: 0.08,
+      fill: { color: q.fill },
+      line: { color: q.fill, width: 0 },
+    });
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: x + 0.25,
+      y: y + 0.2,
+      w: 0.5,
+      h: 0.5,
+      fill: { color: q.color },
+      line: { color: q.color, width: 0 },
+    });
+    slide.addText(q.letter, {
+      x: x + 0.25,
+      y: y + 0.2,
+      w: 0.5,
+      h: 0.5,
+      fontSize: 17,
+      bold: true,
+      color: REPORT_COLORS.white,
+      fontFace: FONT,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+    slide.addText(q.title, {
+      x: x + 0.9,
+      y: y + 0.2,
+      w: w - 1.1,
+      h: 0.5,
+      fontSize: 16,
+      bold: true,
+      color: q.color,
+      fontFace: FONT,
+      valign: 'middle',
+      margin: 0,
+    });
+    addPointList(
+      slide,
+      q.items.map((detail) => ({ title: '', detail })),
+      { x: x + 0.3, y: y + 0.78, w: w - 0.6, h: h - 0.86 },
+      { emptyText: 'Sin puntos identificados.', maxFont: 13, minFont: 9 },
+    );
   });
 }
 
@@ -1020,8 +2036,14 @@ function hasValidSchedule(m: TimelineMeasure): boolean {
 
 export function addTimelineSlide(
   pptx: PptxGenJS,
-  opts: { title: string; nameHeader?: string; measures: TimelineMeasure[] },
+  opts: {
+    kicker?: string;
+    title: string;
+    nameHeader?: string;
+    measures: TimelineMeasure[];
+  },
 ): void {
+  const t = theme(pptx);
   const counts = {
     PENDING: opts.measures.filter((m) => m.status === 'PENDING').length,
     IN_PROGRESS: opts.measures.filter((m) => m.status === 'IN_PROGRESS').length,
@@ -1032,7 +2054,7 @@ export function addTimelineSlide(
     .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   const pages = chunk(dated, 8);
   const summary = [
-    { text: `${opts.measures.length} en total`, color: REPORT_COLORS.ink },
+    { text: `${opts.measures.length} en total`, color: t.dark },
     { text: `${counts.DONE} concluidas`, color: REPORT_COLORS.tierGreen },
     {
       text: `${counts.IN_PROGRESS} en progreso`,
@@ -1053,38 +2075,22 @@ export function addTimelineSlide(
     ? new Date(last.getFullYear(), last.getMonth() + 1, 1)
     : undefined;
   const span = start && end ? end.getTime() - start.getTime() : 0;
-  const nameW = 4.4;
-  const areaX = MARGIN + nameW + 0.2;
-  const areaW = SLIDE_W - MARGIN - areaX - 0.55;
+  const nameW = 4.1;
+  const areaX = X0 + nameW + 0.2;
+  const areaW = RIGHT - areaX - 0.45;
   const xOf = (d: Date) =>
     areaX + ((d.getTime() - (start?.getTime() ?? 0)) / span) * areaW;
   const today = new Date();
 
   pages.forEach((rows, page) => {
-    const slide = newContentSlide(
-      pptx,
-      pageTitle(opts.title, page, pages.length),
-    );
-    slide.addText(
-      summary.flatMap((part, i) => [
-        ...(i > 0
-          ? [{ text: '   ·   ', options: { color: REPORT_COLORS.muted } }]
-          : []),
-        { text: part.text, options: { bold: true, color: part.color } },
-      ]),
-      {
-        x: MARGIN,
-        y: CONTENT_TOP - 0.05,
-        w: CONTENT_W,
-        h: 0.35,
-        fontSize: 13,
-        fontFace: FONT,
-        margin: 0,
-      },
-    );
+    const slide = newContentSlide(pptx, {
+      kicker: opts.kicker,
+      title: pageTitle(opts.title, page, pages.length),
+    });
+    addChips(pptx, slide, summary, CONTENT_TOP - 0.1);
     if (rows.length === 0 || !start || !end) {
       slide.addText('No hay medidas con fechas registradas todavía.', {
-        x: MARGIN,
+        x: X0,
         y: CONTENT_TOP + 0.6,
         w: CONTENT_W,
         h: 0.5,
@@ -1096,12 +2102,12 @@ export function addTimelineSlide(
       return;
     }
 
-    const headY = CONTENT_TOP + 0.5;
+    const headY = CONTENT_TOP + 0.45;
     const top = headY + 0.4;
-    const rowH = Math.min(0.58, (CONTENT_BOTTOM - top) / rows.length);
+    const rowH = Math.min(0.56, (CONTENT_BOTTOM - top) / rows.length);
     const gridH = rowH * rows.length;
     slide.addText(opts.nameHeader ?? 'Medida', {
-      x: MARGIN,
+      x: X0,
       y: headY,
       w: nameW,
       h: 0.3,
@@ -1143,11 +2149,11 @@ export function addTimelineSlide(
       }
     });
     slide.addShape(pptx.ShapeType.line, {
-      x: MARGIN,
+      x: X0,
       y: headY + 0.32,
       w: CONTENT_W,
       h: 0,
-      line: { color: REPORT_COLORS.ink, width: 1 },
+      line: { color: t.accent, width: 1.25 },
     });
 
     rows.forEach((m, i) => {
@@ -1166,7 +2172,7 @@ export function addTimelineSlide(
           },
         ],
         {
-          x: MARGIN,
+          x: X0,
           y,
           w: nameW,
           h: rowH,
@@ -1179,27 +2185,29 @@ export function addTimelineSlide(
       const barH = Math.min(0.24, rowH * 0.4);
       const x0 = xOf(m.startDate);
       const x1 = Math.max(xOf(m.endDate), x0 + 0.06);
-      slide.addShape(pptx.ShapeType.rect, {
+      slide.addShape(pptx.ShapeType.roundRect, {
         x: x0,
         y: y + (rowH - barH) / 2,
         w: x1 - x0,
         h: barH,
+        rectRadius: Math.min(0.05, barH / 2),
         fill: { color: meta.color, transparency: 65 },
         line: { color: meta.color, width: 0 },
       });
       const done = Math.max(0, Math.min(100, m.progressPct ?? 0)) / 100;
       if (done > 0) {
-        slide.addShape(pptx.ShapeType.rect, {
+        slide.addShape(pptx.ShapeType.roundRect, {
           x: x0,
           y: y + (rowH - barH) / 2,
           w: Math.max(0.03, (x1 - x0) * done),
           h: barH,
+          rectRadius: Math.min(0.05, barH / 2),
           fill: { color: meta.color },
           line: { color: meta.color, width: 0 },
         });
       }
       slide.addShape(pptx.ShapeType.line, {
-        x: MARGIN,
+        x: X0,
         y: y + rowH,
         w: CONTENT_W,
         h: 0,
@@ -1232,7 +2240,7 @@ export function addTimelineSlide(
   });
 }
 
-// ── Evolución entre evaluaciones ─────────────────────────────────────────
+// ── Evolución entre evaluaciones: barras y línea ─────────────────────────
 
 export type EvolutionPoint = {
   date: Date;
@@ -1241,24 +2249,26 @@ export type EvolutionPoint = {
   measuresDone: number;
 };
 
-/** Columnas dibujadas por evaluación completada y la tabla de variaciones. */
+/** Barras por evaluación completada, línea de tendencia y tabla de variaciones. */
 export function addEvolutionSlide(
   pptx: PptxGenJS,
-  opts: { title: string; points: EvolutionPoint[] },
+  opts: { kicker?: string; title: string; points: EvolutionPoint[] },
 ): void {
+  const t = theme(pptx);
   const points = opts.points.slice(-8);
-  const slide = newContentSlide(
-    pptx,
-    opts.title,
-    'Puntaje global de cada evaluación completada, de la más antigua a la más reciente',
-  );
-  const chartX = MARGIN + 0.5;
-  const chartW = 6.6;
-  const chartTop = CONTENT_TOP + 0.3;
-  const chartH = CONTENT_BOTTOM - 0.8 - chartTop;
+  const slide = newContentSlide(pptx, {
+    kicker: opts.kicker,
+    title: opts.title,
+    subtitle:
+      'Resultado global de cada evaluación completada, de la más antigua a la más reciente',
+  });
+  const chartX = X0 + 0.55;
+  const chartW = 6.3;
+  const chartTop = CONTENT_TOP + 0.35;
+  const chartH = CONTENT_BOTTOM - 0.55 - chartTop;
   const baseY = chartTop + chartH;
-  for (const tick of [0, 5, 7, 10]) {
-    const y = baseY - (tick / 10) * chartH;
+  for (const tick of [0, 25, 50, 70, 100]) {
+    const y = baseY - (tick / 100) * chartH;
     slide.addShape(pptx.ShapeType.line, {
       x: chartX,
       y,
@@ -1270,12 +2280,12 @@ export function addEvolutionSlide(
         dashType: tick === 0 ? 'solid' : 'dash',
       },
     });
-    slide.addText(String(tick), {
-      x: MARGIN,
+    slide.addText(`${tick}%`, {
+      x: X0,
       y: y - 0.13,
-      w: 0.4,
+      w: 0.48,
       h: 0.26,
-      fontSize: 10,
+      fontSize: 9.5,
       color: REPORT_COLORS.muted,
       fontFace: FONT,
       align: 'right',
@@ -1283,9 +2293,11 @@ export function addEvolutionSlide(
     });
   }
   const slot = chartW / Math.max(points.length, 1);
-  const colW = Math.min(0.9, slot * 0.55);
+  const colW = Math.min(0.85, slot * 0.5);
+  const tops: Array<{ x: number; y: number }> = [];
   points.forEach((p, i) => {
-    const h = (Math.max(0, Math.min(10, p.globalScore)) / 10) * chartH;
+    const pct = scorePct(p.globalScore);
+    const h = (pct / 100) * chartH;
     const x = chartX + i * slot + (slot - colW) / 2;
     const color = tierColor(p.globalScore);
     slide.addShape(pptx.ShapeType.rect, {
@@ -1293,15 +2305,16 @@ export function addEvolutionSlide(
       y: baseY - h,
       w: colW,
       h: Math.max(0.02, h),
-      fill: { color },
+      fill: { color, transparency: 15 },
       line: { color, width: 0 },
     });
-    slide.addText(p.globalScore.toFixed(1), {
+    tops.push({ x: x + colW / 2, y: baseY - h });
+    slide.addText(`${pct} %`, {
       x: x - 0.3,
-      y: baseY - h - 0.32,
+      y: baseY - h - 0.42,
       w: colW + 0.6,
-      h: 0.28,
-      fontSize: 12,
+      h: 0.26,
+      fontSize: 11.5,
       bold: true,
       color: REPORT_COLORS.ink,
       fontFace: FONT,
@@ -1313,100 +2326,89 @@ export function addEvolutionSlide(
       y: baseY + 0.08,
       w: colW + 0.7,
       h: 0.3,
-      fontSize: 10,
+      fontSize: 9.5,
       color: REPORT_COLORS.body,
       fontFace: FONT,
       align: 'center',
       margin: 0,
     });
   });
+  // Línea de tendencia que une las barras, en el color de la herramienta.
+  for (let i = 1; i < tops.length; i++) {
+    const a = tops[i - 1];
+    const b = tops[i];
+    slide.addShape(pptx.ShapeType.line, {
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      w: Math.abs(b.x - a.x),
+      h: Math.max(0.001, Math.abs(b.y - a.y)),
+      flipV: b.y < a.y,
+      line: { color: t.dark, width: 2.25 },
+    });
+  }
+  for (const p of tops) {
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: p.x - 0.08,
+      y: p.y - 0.08,
+      w: 0.16,
+      h: 0.16,
+      fill: { color: REPORT_COLORS.white },
+      line: { color: t.dark, width: 2 },
+    });
+  }
 
-  const tableX = chartX + chartW + 0.5;
-  const tableW = SLIDE_W - MARGIN - tableX;
-  const header = [
-    'Evaluación',
-    'Puntaje',
-    'Variación',
-    'Medidas concluidas',
-  ].map((t, i) => ({
-    text: t,
-    options: {
-      bold: true,
-      color: REPORT_COLORS.white,
-      fill: { color: REPORT_COLORS.brand },
-      align: (i === 0 ? 'left' : 'center') as 'left' | 'center',
-      fontSize: 11,
-    },
-  }));
-  const body = points.map((p, i) => {
-    // Se compara ya redondeado a un decimal, como se muestra: así no aparece
-    // "-0.0" cuando la diferencia real es de centésimas.
+  const tableX = chartX + chartW + 0.45;
+  const tableW = RIGHT - tableX;
+  const rows: TableCell[][] = points.map((p, i) => {
+    // Se compara ya redondeado, como se muestra.
     const delta =
       i === 0
         ? null
-        : Number(p.globalScore.toFixed(1)) -
-          Number(points[i - 1].globalScore.toFixed(1));
+        : scorePct(p.globalScore) - scorePct(points[i - 1].globalScore);
     const deltaText =
       delta === null
         ? '—'
-        : Math.abs(delta) < 0.05
+        : delta === 0
           ? 'Sin cambio'
-          : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`;
-    const deltaColor =
-      delta === null || Math.abs(delta) < 0.05
-        ? REPORT_COLORS.body
-        : delta > 0
-          ? REPORT_COLORS.tierGreen
-          : REPORT_COLORS.tierRed;
-    const fill = {
-      color: i % 2 === 1 ? REPORT_COLORS.panel : REPORT_COLORS.white,
-    };
+          : `${delta > 0 ? '+' : ''}${delta} pts`;
     return [
+      formatDate(p.date),
       {
-        text: formatDate(p.date),
-        options: { color: REPORT_COLORS.ink, fill, fontSize: 11 },
-      },
-      {
-        text: p.globalScore.toFixed(1),
-        options: {
-          bold: true,
-          color: tierColor(p.globalScore),
-          align: 'center' as const,
-          fill,
-          fontSize: 11,
-        },
+        text: `${scorePct(p.globalScore)} %`,
+        bold: true,
+        color: tierColor(p.globalScore),
+        align: 'center',
       },
       {
         text: deltaText,
-        options: {
-          bold: true,
-          color: deltaColor,
-          align: 'center' as const,
-          fill,
-          fontSize: 11,
-        },
+        bold: true,
+        color:
+          delta === null || delta === 0
+            ? REPORT_COLORS.body
+            : delta > 0
+              ? REPORT_COLORS.tierGreen
+              : REPORT_COLORS.tierRed,
+        align: 'center',
       },
       {
         text: `${p.measuresDone} de ${p.measuresTotal}`,
-        options: {
-          color: REPORT_COLORS.body,
-          align: 'center' as const,
-          fill,
-          fontSize: 11,
-        },
+        color: REPORT_COLORS.body,
+        align: 'center',
       },
     ];
   });
-  slide.addTable([header, ...body] as PptxGenJS.TableRow[], {
+  styledTable(pptx, slide, {
     x: tableX,
-    y: CONTENT_TOP + 0.3,
+    y: CONTENT_TOP + 0.35,
     w: tableW,
-    colW: [tableW * 0.3, tableW * 0.17, tableW * 0.27, tableW * 0.26],
-    fontFace: FONT,
-    valign: 'middle',
-    margin: [0.06, 0.08, 0.06, 0.08],
-    border: { type: 'solid', color: REPORT_COLORS.rule, pt: 0.5 },
-    autoPage: false,
+    columns: [
+      { header: 'Evaluación', weight: 3 },
+      { header: 'Resultado', weight: 1.9, align: 'center' },
+      { header: 'Variación', weight: 2.3, align: 'center' },
+      { header: 'Medidas concluidas', weight: 2.5, align: 'center' },
+    ],
+    rows,
+    fontSize: 10.5,
   });
 }
 

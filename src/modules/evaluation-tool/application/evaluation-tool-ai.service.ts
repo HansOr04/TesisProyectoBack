@@ -8,11 +8,15 @@ import {
   AiInconsistencyFinding,
   AiMeasureSuggestion,
   AiReportContext,
+  AiKpiContext,
   AiReportInsights,
+  AiSwot,
   NarrativeTone,
   parseAiInconsistencyFindings,
   parseAiMeasureSuggestions,
   parseAiReportInsights,
+  parseAiSwot,
+  countryName,
 } from '../domain/evaluation-tool-ai.types';
 
 // Asistencia de IA común a las herramientas: mejorar redacción de observaciones,
@@ -94,14 +98,28 @@ Responde solo con el texto de la narrativa, sin explicaciones ni markdown, en 3-
 
   protected get reportInsightsPrompt(): string {
     const s = this.context.sectionLabel;
-    return `Eres un consultor senior de cumplimiento normativo que analiza evaluaciones de ${this.context.domain} de asociaciones de productores para un reporte ejecutivo en diapositivas.
+    return `Eres un consultor senior que analiza evaluaciones de ${this.context.domain} de asociaciones de productores para un reporte ejecutivo en diapositivas.
 ${ANTI_HALLUCINATION_RULE}
-Con los puntajes por ${s} y los KPI críticos recibidos, produce:
+Con los puntajes por ${s}, los KPI mejor y peor calificados de cada ${s} y los KPI críticos recibidos, produce:
 - "keyFindings": 3 a 5 hallazgos clave, cada uno una oración concisa que sintetice un patrón real de los datos (no repitas un KPI por hallazgo, busca relaciones entre ${this.context.sectionLabelPlural}).
 - "sectionAnalysis": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos (como string) y cuyo valor sea 1-2 oraciones analizando esa ${s} específica.
+- "strengths": máximo 4 fortalezas principales de la organización en general; cada una {"title": 2 a 4 palabras, "detail": una oración de máximo 20 palabras}.
+- "gaps": máximo 4 brechas críticas de la organización en general, con el mismo formato.
+- "conclusion": 1 a 2 oraciones con la lectura de cierre: cómo va la asociación y qué debe priorizar.
+- "sectionInsights": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos y cuyo valor sea {"strengths": [...], "gaps": [...]}, con máximo 3 puntos cada uno en el formato {"title": 2 a 4 palabras, "detail": máximo 18 palabras}, basados en los KPI de esa ${s}. Si una ${s} no tiene fortalezas o brechas claras, deja la lista vacía.
 - "recommendations": 3 a 5 recomendaciones estratégicas priorizadas (la más urgente primero), cada una una oración accionable.
 Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o después, con este formato exacto:
-{"keyFindings": ["..."], "sectionAnalysis": {"1": "...", "2": "..."}, "recommendations": ["..."]}`;
+{"keyFindings": ["..."], "sectionAnalysis": {"1": "..."}, "strengths": [{"title": "...", "detail": "..."}], "gaps": [{"title": "...", "detail": "..."}], "conclusion": "...", "sectionInsights": {"1": {"strengths": [{"title": "...", "detail": "..."}], "gaps": [{"title": "...", "detail": "..."}]}}, "recommendations": ["..."]}`;
+  }
+
+  protected get swotPrompt(): string {
+    return `Eres un consultor de desarrollo de cadenas de valor que prepara el análisis FODA de una asociación de productores a partir de su evaluación de ${this.context.domain}.
+Fortalezas y debilidades: básalas ÚNICAMENTE en los puntajes y KPI recibidos; no inventes datos, cifras ni hechos de la organización.
+Oportunidades: oportunidades de mercado reales para una organización de este tipo, producto y tamaño.
+Amenazas: amenazas propias del contexto del país indicado (clima, precios internacionales, regulación, mercado, institucionalidad), sin inventar cifras ni fechas.
+Máximo 4 puntos por cuadrante; cada punto es una sola oración en español de máximo 20 palabras.
+Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o después, con este formato exacto:
+{"strengths": ["..."], "weaknesses": ["..."], "opportunities": ["..."], "threats": ["..."]}`;
   }
 
   // ── Capacidades ──────────────────────────────────────────────────────────
@@ -232,10 +250,13 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
   async generateReportInsights(
     context: AiReportContext,
   ): Promise<AiReportInsights> {
-    const userPrompt = this.describeReportContext(context).join('\n');
+    const userPrompt = [
+      ...this.describeReportContext(context, 'pct'),
+      ...this.describeSectionDetails(context),
+    ].join('\n');
     const maxOutputTokens = Math.min(
-      2000 + 150 * context.sectionScores.length,
-      4000,
+      2500 + 300 * context.sectionScores.length,
+      6000,
     );
     const result = await this.llmClient.complete(
       this.reportInsightsPrompt,
@@ -245,27 +266,103 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       // El export PPTX también lee la BD y arma el archivo dentro de los 30 s
       // de Heroku; si la IA tarda más, el reporte sale sin insights.
       15_000,
+      { fast: true },
     );
     this.log('report insights generated', { tokensUsed: result.tokensUsed });
-    return parseAiReportInsights(
-      result.text,
-      context.sectionScores.map((s) => String(s.number)),
+    return this.parseOrWarn('report insights', result.text, (text) =>
+      parseAiReportInsights(
+        text,
+        context.sectionScores.map((s) => String(s.number)),
+      ),
     );
   }
 
-  protected describeReportContext(context: AiReportContext): string[] {
+  // FODA para el reporte de una evaluación completada. Corre en paralelo con
+  // los insights y con el mismo límite de tiempo.
+  async generateSwot(context: AiReportContext): Promise<AiSwot> {
+    const userPrompt = [
+      ...this.describeProfile(context),
+      ...this.describeReportContext(context, 'pct'),
+      ...this.describeSectionDetails(context),
+    ].join('\n');
+    const result = await this.llmClient.complete(
+      this.swotPrompt,
+      userPrompt,
+      1500,
+      0.5,
+      15_000,
+      { fast: true },
+    );
+    this.log('swot generated', { tokensUsed: result.tokensUsed });
+    return this.parseOrWarn('swot', result.text, parseAiSwot);
+  }
+
+  protected describeProfile(context: AiReportContext): string[] {
+    const p = context.profile;
+    if (!p) return [];
     return [
-      `Puntaje global: ${context.globalScore}/10`,
-      `Puntajes por ${this.context.sectionLabel}:`,
+      `Organización: ${p.name}`,
+      p.type ? `Tipo: ${p.type}` : '',
+      `País: ${countryName(p.country)}${p.region ? ` (${p.region})` : ''}`,
+      p.mainProduct ? `Producto principal: ${p.mainProduct}` : '',
+      p.memberCount ? `Socios: ${p.memberCount}` : '',
+    ].filter(Boolean);
+  }
+
+  protected describeSectionDetails(context: AiReportContext): string[] {
+    if (!context.sectionDetails?.length) return [];
+    const kpi = (k: AiKpiContext) =>
+      `${k.code} ${k.name} (${Math.round(k.score * 10)} %)${k.observation ? `: ${k.observation}` : ''}`;
+    return context.sectionDetails.flatMap((d) => [
+      `${capitalize(this.context.sectionLabel)} ${d.number}:`,
+      ...d.best.map((k) => `  + ${kpi(k)}`),
+      ...d.worst.map((k) => `  - ${kpi(k)}`),
+    ]);
+  }
+
+  /**
+   * Puntajes para el prompt. El reporte se presenta en porcentaje (`pct`), así
+   * que sus análisis reciben los datos en esa escala para citarlos igual.
+   */
+  protected describeReportContext(
+    context: AiReportContext,
+    scale: 'score' | 'pct' = 'score',
+  ): string[] {
+    const fmt = (score: number) =>
+      scale === 'pct' ? `${Math.round(score * 10)} %` : `${score}/10`;
+    return [
+      `${scale === 'pct' ? 'Resultado global' : 'Puntaje global'}: ${fmt(context.globalScore)}`,
+      `${scale === 'pct' ? 'Resultados' : 'Puntajes'} por ${this.context.sectionLabel}:`,
       ...context.sectionScores.map(
-        (s) => `- ${s.number}. ${s.name}: ${s.weightedAvg}/10`,
+        (s) => `- ${s.number}. ${s.name}: ${fmt(s.weightedAvg)}`,
       ),
       context.criticalItems.length > 0
         ? `KPI críticos: ${context.criticalItems
-            .map((c) => `${c.code} (${c.name}, ${c.score}/10)`)
+            .map((c) => `${c.code} (${c.name}, ${fmt(c.score)})`)
             .join('; ')}`
         : 'No hay KPI críticos.',
     ];
+  }
+
+  /** Si la respuesta no se puede leer, deja rastro (largo y final) y relanza. */
+  protected parseOrWarn<T>(
+    capability: string,
+    text: string,
+    parse: (text: string) => T,
+  ): T {
+    try {
+      return parse(text);
+    } catch (error) {
+      this.logger?.warn(
+        `${this.context.logLabel} AI: unreadable ${capability} response`,
+        {
+          length: text.length,
+          tail: text.slice(-120),
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      );
+      throw error;
+    }
   }
 
   protected log(event: string, data: Record<string, unknown>) {

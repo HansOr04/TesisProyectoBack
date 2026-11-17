@@ -7,6 +7,7 @@ import { HttpService } from '@nestjs/axios';
 import { StructuredLoggerService } from '../../../shared/infrastructure/logging/structured-logger.service';
 import { LlmCircuitBreaker } from '../domain/llm-circuit-breaker';
 import {
+  AiCompletionOptions,
   AiCompletionResult,
   AiProvider,
 } from '../domain/ports/ai-provider.port';
@@ -56,6 +57,7 @@ export class AssessmentLlmClientService {
     maxOutputTokens: number,
     temperature: number,
     timeoutMs: number = DEFAULT_AI_TIMEOUT_MS,
+    options?: AiCompletionOptions,
   ): Promise<AiCompletionResult> {
     // Sin credencial no tiene sentido salir a la red: se responde 503 de inmediato.
     if (this.missingApiKeyVar) {
@@ -75,6 +77,7 @@ export class AssessmentLlmClientService {
         maxOutputTokens,
         temperature,
         timeoutMs,
+        options,
       );
       this.circuitBreaker.recordSuccess(this.providerName);
       return result;

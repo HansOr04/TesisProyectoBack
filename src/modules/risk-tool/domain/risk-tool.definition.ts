@@ -16,6 +16,8 @@ export const RISK_TOOL_DEFINITION: EvaluationToolDefinition = {
   report: {
     subtitle: 'Identificación y gestión de riesgos',
     scoreLevelPrefix: 'Capacidad',
+    // Mismo color que la herramienta en la aplicación.
+    accentColor: '239F71',
   },
   strategy: new RiskStrategy(),
 };
