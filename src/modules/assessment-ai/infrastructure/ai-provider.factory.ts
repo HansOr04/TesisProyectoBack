@@ -30,8 +30,11 @@ export function createAiProviderFromEnv(
 
   const apiKey = env.GEMINI_API_KEY ?? '';
   const model = env.GEMINI_MODEL || 'gemini-flash-latest';
+  // gemini-flash-latest razona antes de responder (~20 s); el modelo lite
+  // responde en 1-3 s, lo que cabe en los 30 s de Heroku de un export.
+  const fastModel = env.GEMINI_FAST_MODEL || 'gemini-flash-lite-latest';
   return {
-    provider: new GeminiProvider(httpService, apiKey, model),
+    provider: new GeminiProvider(httpService, apiKey, model, fastModel),
     missingApiKey: !apiKey,
     apiKeyEnvVar: 'GEMINI_API_KEY',
   };

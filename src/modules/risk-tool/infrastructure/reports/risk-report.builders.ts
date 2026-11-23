@@ -1,20 +1,18 @@
 import { buildFormattedWorkbook } from '../../../../shared/infrastructure/reports/excel-cell.util';
 import {
   addClassificationSlide,
-  addCoverSlide,
   addEvolutionSlide,
-  addExecutiveSummarySlide,
-  addGaugeSlide,
-  addSectionScoresSlide,
+  addPlanSummarySlide,
   addTableSlide,
   addTimelineSlide,
   TimelineMeasure,
-  createReportPptx,
   REPORT_COLORS,
-  tierColor,
   writePptxBuffer,
 } from '../../../../shared/infrastructure/reports/pptx-report.util';
-import { AiReportInsights } from '../../../evaluation-tool/domain/evaluation-tool-ai.types';
+import {
+  AiReportInsights,
+  AiSwot,
+} from '../../../evaluation-tool/domain/evaluation-tool-ai.types';
 import { EvaluationToolDefinition } from '../../../evaluation-tool/domain/evaluation-tool.definition';
 import {
   EvaluationWithStructure,
@@ -22,19 +20,18 @@ import {
   SectionScoreResult,
 } from '../../../evaluation-tool/domain/evaluation-tool.types';
 import {
-  addInsightSlides,
-  addRecommendationSlides,
+  addClosingSlides,
+  addResultSlides,
+  addToolCoverSlide,
+  createToolReport,
   EXCEL_CONTENT_TYPE,
   evaluationSubtitle,
   evolutionPoints,
   MEASURE_STATUS_LABEL,
   planStatusCell,
   PPTX_CONTENT_TYPE,
-  reportDate,
-  scoreLevelPhrase,
+  scoreCell,
   sectionByIndicator,
-  sectionRowsFor,
-  STATUS_LABEL,
 } from '../../../evaluation-tool/infrastructure/reports/evaluation-report.builders';
 import { RiskWithMeasures } from '../../domain/risk-tool.types';
 
@@ -194,7 +191,9 @@ export interface MitigationPptxInput {
     measuresDone: number;
   }[];
   narrative: string;
+  customNarrative?: boolean;
   insights: AiReportInsights | null;
+  swot?: AiSwot | null;
   /**
    * Plan consolidado que reemplaza al Gantt propio de la herramienta cuando
    * al exportar se pide un alcance mayor (la organización o el proyecto).
@@ -210,7 +209,7 @@ export async function buildMitigationPlanPptx(
   definition: EvaluationToolDefinition,
   input: MitigationPptxInput,
 ): Promise<FileExport> {
-  const { evaluation, sectionScores, globalScore, risks, insights } = input;
+  const { evaluation, risks, insights } = input;
   const nonNegligibleRisks = risks.filter((r) => r.class === 'NON_NEGLIGIBLE');
   const indicatorById = new Map(
     evaluation.template.sections
@@ -221,58 +220,19 @@ export async function buildMitigationPlanPptx(
     evaluation.responses.map((r) => [r.indicatorId, r.score]),
   );
   const sectionLabel = definition.section.singular;
-  const allMeasures = risks.flatMap((r) => r.measures);
+  const allMeasures = risks.flatMap((r) =>
+    r.measures.map((m) => ({ ...m, indicatorId: r.indicatorId })),
+  );
   const withoutMeasure = nonNegligibleRisks.filter(
     (r) => r.measures.length === 0,
   ).length;
 
-  const pptx = createReportPptx(
-    `${evaluation.profile.name} · ${definition.displayName}`,
-  );
-
-  addCoverSlide(pptx, {
-    tool: definition.displayName,
-    orgName: evaluation.profile.name,
-    subtitle: definition.report.subtitle,
-    status: STATUS_LABEL[evaluation.status] ?? evaluation.status,
-    date: reportDate(),
-  });
-
-  addExecutiveSummarySlide(pptx, {
-    title: 'Resumen ejecutivo',
-    globalScore,
-    level: scoreLevelPhrase(definition, globalScore),
-    facts: [
-      { label: 'Riesgos identificados', value: String(risks.length) },
-      { label: 'No despreciables', value: String(nonNegligibleRisks.length) },
-      { label: 'No despreciables sin medida', value: String(withoutMeasure) },
-      {
-        label: 'Medidas concluidas',
-        value: `${allMeasures.filter((m) => m.status === 'DONE').length} de ${allMeasures.length}`,
-      },
-    ],
-    narrative: input.narrative,
-  });
-
-  addGaugeSlide(pptx, {
-    title: `Puntaje por ${sectionLabel.toLowerCase()}`,
-    subtitle: 'Escala de 0 a 10, con los mismos cortes que usa la aplicación',
-    items: sectionScores.map((s) => ({
-      label: `${s.number}. ${s.name}`,
-      score: s.weightedAvg,
-    })),
-  });
-
-  addSectionScoresSlide(pptx, {
-    title: `Detalle por ${sectionLabel.toLowerCase()}`,
-    subtitle: 'Peso en el puntaje global, nota y KPI críticos de cada uno',
-    sectionLabel,
-    rows: sectionRowsFor(evaluation, sectionScores),
-  });
-
-  addInsightSlides(pptx, definition, sectionScores, insights);
+  const pptx = createToolReport(definition, evaluation);
+  addToolCoverSlide(pptx, definition, evaluation);
+  addResultSlides(pptx, definition, input);
 
   addClassificationSlide(pptx, {
+    kicker: 'Riesgos',
     title: 'Clasificación de riesgos',
     subtitle: `${risks.length} riesgos identificados, por ${sectionLabel.toLowerCase()}`,
     totals: [
@@ -304,38 +264,42 @@ export async function buildMitigationPlanPptx(
       ).length;
       return [
         `${section.number}. ${section.name}`,
-        String(list.length),
-        String(list.length - nonNeg),
+        { text: String(list.length), align: 'center' },
+        { text: String(list.length - nonNeg), align: 'center' },
         {
           text: String(nonNeg),
           bold: nonNeg > 0,
           color: nonNeg > 0 ? REPORT_COLORS.tierRed : undefined,
+          align: 'center',
         },
         {
           text: String(missing),
           bold: missing > 0,
           color: missing > 0 ? REPORT_COLORS.tierRed : undefined,
+          align: 'center',
         },
       ];
     }),
   });
 
   addTableSlide(pptx, {
+    kicker: 'Riesgos',
     title: 'Riesgos no despreciables',
-    subtitle: 'Ordenados de la nota más baja a la más alta del KPI de origen',
+    subtitle: 'Ordenados del resultado más bajo al más alto del KPI de origen',
     summary: [
       { text: `${nonNegligibleRisks.length} riesgos no despreciables` },
       {
         text: `${withoutMeasure} sin medida de mitigación`,
-        color: REPORT_COLORS.tierRed,
+        color:
+          withoutMeasure > 0 ? REPORT_COLORS.tierRed : REPORT_COLORS.tierGreen,
       },
     ],
     columns: [
-      { header: 'Código', weight: 0.9 },
+      { header: 'KPI', weight: 0.9 },
       { header: 'Indicador', weight: 3 },
-      { header: 'Nota', weight: 0.75, align: 'center' },
-      { header: 'Riesgo', weight: 4.2 },
-      { header: 'Tipo', weight: 1.5 },
+      { header: 'Resultado', weight: 1.05, align: 'center' },
+      { header: 'Riesgo', weight: 4.1 },
+      { header: 'Tipo', weight: 1.4 },
       { header: 'Mitigación', weight: 1.3, align: 'center' },
     ],
     rows: [...nonNegligibleRisks]
@@ -346,19 +310,11 @@ export async function buildMitigationPlanPptx(
       )
       .map((r) => {
         const indicator = indicatorById.get(r.indicatorId);
-        const score = scoreByIndicator.get(r.indicatorId);
         const description = r.description.trim();
         return [
           { text: indicator?.code ?? '', bold: true },
           indicator?.name ?? '',
-          score === undefined
-            ? { text: '—', align: 'center' }
-            : {
-                text: score.toFixed(1),
-                bold: true,
-                color: tierColor(score),
-                align: 'center',
-              },
+          scoreCell(scoreByIndicator.get(r.indicatorId)),
           description.length > 160
             ? `${description.slice(0, 159).trimEnd()}…`
             : description,
@@ -367,13 +323,28 @@ export async function buildMitigationPlanPptx(
         ];
       }),
     emptyText: 'No hay riesgos no despreciables en esta evaluación.',
-    rowsPerSlide: 7,
+    rowsPerSlide: 9,
   });
 
-  addTimelineSlide(
-    pptx,
-    input.consolidatedGantt ?? {
-      title: 'Avance del plan de mitigación',
+  addPlanSummarySlide(pptx, {
+    kicker: 'Plan de mitigación',
+    title: 'Resumen del plan de mitigación',
+    subtitle: 'Medidas registradas para los riesgos no despreciables',
+    measures: allMeasures.map((m) => ({
+      name: m.description,
+      kpi: indicatorById.get(m.indicatorId)?.code,
+      responsible: m.responsible,
+      endDate: m.endDate,
+      status: m.status,
+      progressPct: m.progressPct,
+    })),
+    uncovered: { label: 'Riesgos sin medida', value: withoutMeasure },
+  });
+
+  addTimelineSlide(pptx, {
+    kicker: 'Plan de mitigación',
+    ...(input.consolidatedGantt ?? {
+      title: 'Cronograma del plan de mitigación',
       measures: allMeasures.map((m) => ({
         name: m.description,
         detail: m.responsible,
@@ -382,17 +353,18 @@ export async function buildMitigationPlanPptx(
         status: m.status,
         progressPct: m.progressPct,
       })),
-    },
-  );
+    }),
+  });
 
   if (input.history.length > 1) {
     addEvolutionSlide(pptx, {
+      kicker: 'Seguimiento',
       title: 'Evolución en el tiempo',
       points: evolutionPoints(input.history),
     });
   }
 
-  addRecommendationSlides(pptx, insights);
+  addClosingSlides(pptx, evaluation, insights, input.swot);
 
   return {
     filename: `reporte-${definition.slug}-${evaluation.id}.pptx`,

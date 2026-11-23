@@ -11,6 +11,8 @@ export const CAPACITY_TOOL_DEFINITION: EvaluationToolDefinition = {
   report: {
     subtitle: 'Análisis de capacidades frente al marco normativo aplicable',
     scoreLevelPrefix: 'Capacidad',
+    // Mismo color que la herramienta en la aplicación.
+    accentColor: 'F78008',
   },
   strategy: new CapacityStrategy(),
 };

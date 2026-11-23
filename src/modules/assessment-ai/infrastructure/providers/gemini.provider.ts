@@ -1,6 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import {
+  AiCompletionOptions,
   AiCompletionResult,
   AiProvider,
 } from '../../domain/ports/ai-provider.port';
@@ -12,7 +13,13 @@ export class GeminiProvider implements AiProvider {
     private readonly httpService: HttpService,
     private readonly apiKey: string,
     private readonly model: string,
+    /** Modelo sin razonamiento previo, para respuestas dentro de un export. */
+    private readonly fastModel: string = model,
   ) {}
+
+  modelFor(options?: AiCompletionOptions): string {
+    return options?.fast ? this.fastModel : this.model;
+  }
 
   async complete(
     systemPrompt: string,
@@ -20,19 +27,31 @@ export class GeminiProvider implements AiProvider {
     maxOutputTokens: number,
     temperature: number,
     timeoutMs: number,
+    options?: AiCompletionOptions,
   ): Promise<AiCompletionResult> {
+    const model = this.modelFor(options);
     const response = await firstValueFrom(
       this.httpService.post<{
         candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> };
+          content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          finishReason?: string;
         }>;
-        usageMetadata?: { totalTokenCount?: number };
+        usageMetadata?: {
+          totalTokenCount?: number;
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          thoughtsTokenCount?: number;
+        };
       }>(
-        `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           contents: [{ parts: [{ text: userPrompt }] }],
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { maxOutputTokens, temperature },
+          generationConfig: {
+            maxOutputTokens,
+            temperature,
+            ...(options?.json ? { responseMimeType: 'application/json' } : {}),
+          },
         },
         {
           timeout: timeoutMs,
@@ -43,9 +62,21 @@ export class GeminiProvider implements AiProvider {
         },
       ),
     );
+    // La respuesta puede venir partida en varias partes: se unen todas, sin
+    // las de razonamiento interno. Leer solo la primera cortaba el JSON.
+    const parts = response.data.candidates?.[0]?.content?.parts ?? [];
+    const usage = response.data.usageMetadata;
     return {
-      text: response.data.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
-      tokensUsed: response.data.usageMetadata?.totalTokenCount,
+      text: parts
+        .filter((p) => !p.thought)
+        .map((p) => p.text ?? '')
+        .join(''),
+      tokensUsed: usage?.totalTokenCount,
+      finishReason: response.data.candidates?.[0]?.finishReason,
+      inputTokens: usage?.promptTokenCount,
+      outputTokens:
+        (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0) ||
+        undefined,
     };
   }
 }
