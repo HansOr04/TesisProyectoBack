@@ -1,0 +1,27 @@
+# Revisión de dependencias en cada pull request: falla si el cambio agrega
+# una dependencia con una vulnerabilidad alta o crítica conocida. Corre en
+# paralelo con la integración continua. No revisa las que ya estaban; esas
+# se ven con `npm audit`.
+name: Dependencias
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: dependencias-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Dependencias nuevas sin vulnerabilidades
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
