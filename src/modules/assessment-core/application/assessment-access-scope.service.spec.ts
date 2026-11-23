@@ -9,6 +9,8 @@ describe('AssessmentAccessScopeService', () => {
     authUserRole: { findMany: jest.Mock };
     assessmentOrganisationProfile: { findFirst: jest.Mock; count: jest.Mock };
     assessmentEvaluation: { findFirst: jest.Mock };
+    assessmentIndicatorMeasure: { findFirst: jest.Mock };
+    assessmentRisk: { findFirst: jest.Mock };
     assessmentMitigationMeasure: { findFirst: jest.Mock };
   };
 
@@ -28,6 +30,8 @@ describe('AssessmentAccessScopeService', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       assessmentEvaluation: { findFirst: jest.fn() },
+      assessmentIndicatorMeasure: { findFirst: jest.fn() },
+      assessmentRisk: { findFirst: jest.fn() },
       assessmentMitigationMeasure: { findFirst: jest.fn() },
     };
     const module: TestingModule = await Test.createTestingModule({
@@ -88,6 +92,37 @@ describe('AssessmentAccessScopeService', () => {
       roles(['assessment_viewer', { allProfiles: true, profileIds: [] }]);
       expect(await service.resolveProfileScope('org1', 'user1', false)).toEqual(
         {},
+      );
+    });
+
+    it('reads only the active Assessment roles of this user in this project', async () => {
+      await service.resolveProfileScope('org1', 'user1', false);
+      expect(prisma.authUserRole.findMany).toHaveBeenCalledWith({
+        where: {
+          organisation: 'org1',
+          userId: 'user1',
+          deletedAt: null,
+          role: {
+            code: {
+              in: [
+                'assessment_admin',
+                'assessment_evaluator',
+                'assessment_viewer',
+              ],
+            },
+          },
+        },
+        select: { customPermissions: true, role: { select: { code: true } } },
+      });
+    });
+
+    it('keeps an evaluator who is also a viewer to their assigned profiles', async () => {
+      roles(
+        ['assessment_viewer', { allProfiles: true, profileIds: [] }],
+        ['assessment_evaluator'],
+      );
+      expect(await service.resolveProfileScope('org1', 'user1', false)).toEqual(
+        { evaluatorId: 'user1' },
       );
     });
 
@@ -173,5 +208,92 @@ describe('AssessmentAccessScopeService', () => {
       ).rejects.toThrow(NotFoundException);
       expect(prisma.assessmentOrganisationProfile.count).not.toHaveBeenCalled();
     });
+    it.each([
+      [
+        'indicator-measure',
+        'assessmentIndicatorMeasure',
+        { id: 'r1', organisation: 'org1', deletedAt: null },
+        { evaluation: { select: { profile: { select: { id: true } } } } },
+        { evaluation: { profile: { id: 'p1' } } },
+      ],
+      [
+        'risk',
+        'assessmentRisk',
+        { id: 'r1', evaluation: { organisation: 'org1' } },
+        { evaluation: { select: { profile: { select: { id: true } } } } },
+        { evaluation: { profile: { id: 'p1' } } },
+      ],
+      [
+        'mitigation-measure',
+        'assessmentMitigationMeasure',
+        {
+          id: 'r1',
+          deletedAt: null,
+          risk: { evaluation: { organisation: 'org1' } },
+        },
+        {
+          risk: {
+            select: {
+              evaluation: { select: { profile: { select: { id: true } } } },
+            },
+          },
+        },
+        { risk: { evaluation: { profile: { id: 'p1' } } } },
+      ],
+      [
+        'profile',
+        'assessmentOrganisationProfile',
+        { id: 'r1', organisation: 'org1', deletedAt: null },
+        { id: true },
+        { id: 'p1' },
+      ],
+    ] as const)(
+      'finds the organisation of a %s only inside the project',
+      async (resource, model, where, select, row) => {
+        (prisma as unknown as Record<string, { findFirst: jest.Mock }>)[
+          model
+        ].findFirst.mockResolvedValue(row);
+        prisma.assessmentOrganisationProfile.count.mockResolvedValue(1);
+        await expect(
+          service.assertInScope(
+            'org1',
+            { evaluatorId: 'user1' },
+            resource,
+            'r1',
+          ),
+        ).resolves.toBeUndefined();
+        expect(
+          (prisma as unknown as Record<string, { findFirst: jest.Mock }>)[model]
+            .findFirst,
+        ).toHaveBeenCalledWith({ where, select });
+        expect(prisma.assessmentOrganisationProfile.count).toHaveBeenCalledWith(
+          {
+            where: {
+              id: 'p1',
+              organisation: 'org1',
+              deletedAt: null,
+              evaluatorId: 'user1',
+            },
+          },
+        );
+      },
+    );
+
+    it.each(['indicator-measure', 'risk'] as const)(
+      'answers 404 when the %s does not exist',
+      async (resource) => {
+        await expect(
+          service.assertInScope(
+            'org1',
+            { evaluatorId: 'user1' },
+            resource,
+            'x',
+          ),
+        ).rejects.toThrow(NotFoundException);
+        expect(
+          prisma.assessmentOrganisationProfile.count,
+        ).not.toHaveBeenCalled();
+      },
+    );
   });
 });
