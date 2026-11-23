@@ -70,8 +70,10 @@ export interface AnalyticsDataset {
 
 export const ANALYTICS_DATASET = Symbol('ANALYTICS_DATASET');
 
+/** Mismo recorte que AssessmentProfileScope: filtro Prisma sobre el perfil. */
 export interface AnalyticsProfileScope {
   evaluatorId?: string;
+  AND?: { id: { in: string[] } }[];
 }
 
 /** Puerto: quien provea el dataset (Prisma hoy) no condiciona los cálculos. */

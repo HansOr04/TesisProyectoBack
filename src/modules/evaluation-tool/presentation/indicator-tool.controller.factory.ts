@@ -318,7 +318,7 @@ export function createIndicatorToolController(
           dto.narrative,
           user.id,
           dto.ganttScope,
-          scope.evaluatorId,
+          scope,
         ),
       );
     }

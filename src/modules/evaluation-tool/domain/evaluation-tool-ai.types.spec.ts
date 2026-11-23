@@ -3,6 +3,7 @@ import {
   parseAiMeasureSuggestions,
   parseAiInconsistencyFindings,
   parseAiReportInsights,
+  parseAiSwot,
 } from './evaluation-tool-ai.types';
 
 describe('parseAiMeasureSuggestions (anti-hallucination guard)', () => {
@@ -146,14 +147,52 @@ describe('parseAiReportInsights (anti-hallucination guard)', () => {
 
     const result = parseAiReportInsights(raw, ['1', '2']);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       keyFindings: ['Hallazgo 1', 'Hallazgo 2'],
       sectionAnalysis: {
         '1': 'Análisis dimensión 1',
         '2': 'Análisis dimensión 2',
       },
       recommendations: ['Recomendación 1'],
+      strengths: [],
+      gaps: [],
+      conclusion: '',
+      sectionInsights: {},
     });
+  });
+
+  it('parses general and per-section strengths and gaps, capped and validated', () => {
+    const raw = JSON.stringify({
+      keyFindings: [],
+      sectionAnalysis: {},
+      recommendations: [],
+      strengths: [
+        { title: 'Gobernanza', detail: 'Directiva activa.' },
+        'Mercado: clientes estables.',
+        'a',
+        'b',
+        'c',
+      ],
+      gaps: [{ title: '', detail: '' }, 'Finanzas: sin presupuesto.'],
+      conclusion: '  Cierre.  ',
+      sectionInsights: {
+        '1': { strengths: ['Personal: con experiencia.'], gaps: [] },
+        '99': { strengths: ['inventada'], gaps: [] },
+      },
+    });
+
+    const result = parseAiReportInsights(raw, ['1']);
+
+    expect(result.strengths).toHaveLength(4);
+    expect(result.strengths[1]).toEqual({
+      title: 'Mercado',
+      detail: 'clientes estables.',
+    });
+    expect(result.gaps).toEqual([
+      { title: 'Finanzas', detail: 'sin presupuesto.' },
+    ]);
+    expect(result.conclusion).toBe('Cierre.');
+    expect(Object.keys(result.sectionInsights)).toEqual(['1']);
   });
 
   it('tolerates surrounding prose around the JSON object', () => {
@@ -190,6 +229,10 @@ describe('parseAiReportInsights (anti-hallucination guard)', () => {
       keyFindings: [],
       sectionAnalysis: {},
       recommendations: [],
+      strengths: [],
+      gaps: [],
+      conclusion: '',
+      sectionInsights: {},
     });
   });
 
@@ -203,5 +246,31 @@ describe('parseAiReportInsights (anti-hallucination guard)', () => {
     expect(() =>
       parseAiReportInsights('{"keyFindings": ["a",]}', ['1']),
     ).toThrow(BadGatewayException);
+  });
+});
+
+describe('parseAiSwot', () => {
+  it('keeps up to four non-empty points per quadrant', () => {
+    const raw = JSON.stringify({
+      strengths: ['f1', 'f2', 'f3', 'f4', 'f5'],
+      weaknesses: ['d1', ''],
+      opportunities: ['o1'],
+      threats: [3, 'a1'],
+    });
+    expect(parseAiSwot(raw)).toEqual({
+      strengths: ['f1', 'f2', 'f3', 'f4'],
+      weaknesses: ['d1'],
+      opportunities: ['o1'],
+      threats: ['a1'],
+    });
+  });
+
+  it('tolerates a stray closing brace after the object', () => {
+    const raw = '{"strengths": ["f1"], "threats": ["a \\"x\\" }"]}}';
+    expect(parseAiSwot(raw).threats).toEqual(['a "x" }']);
+  });
+
+  it('rejects an empty SWOT', () => {
+    expect(() => parseAiSwot('{"strengths": []}')).toThrow();
   });
 });

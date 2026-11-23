@@ -4,9 +4,12 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { createHash } from 'node:crypto';
+import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import { StructuredLoggerService } from '../../../shared/infrastructure/logging/structured-logger.service';
 import { LlmCircuitBreaker } from '../domain/llm-circuit-breaker';
 import {
+  AiCompletionOptions,
   AiCompletionResult,
   AiProvider,
 } from '../domain/ports/ai-provider.port';
@@ -18,6 +21,9 @@ export type { AiCompletionResult } from '../domain/ports/ai-provider.port';
 // debe rendirse antes para que el endpoint responda con un error claro (o
 // con su fallback) en vez de quedar colgado hasta que el router lo mate.
 export const DEFAULT_AI_TIMEOUT_MS = 25_000;
+
+/** Las respuestas guardadas se reutilizan hasta 90 días. */
+export const AI_CACHE_TTL_DAYS = 90;
 
 // Módulo de IA compartido: un solo punto de selección de proveedor
 // (Gemini/NVIDIA vía AI_PROVIDER), llamada HTTP y circuit breaker,
@@ -35,6 +41,7 @@ export class AssessmentLlmClientService {
   constructor(
     private readonly httpService: HttpService,
     @Optional() private readonly logger?: StructuredLoggerService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {
     this.logger?.setContext({ service: 'AssessmentLlmClientService' });
     const { provider, missingApiKey, apiKeyEnvVar } =
@@ -56,12 +63,20 @@ export class AssessmentLlmClientService {
     maxOutputTokens: number,
     temperature: number,
     timeoutMs: number = DEFAULT_AI_TIMEOUT_MS,
+    options?: AiCompletionOptions,
   ): Promise<AiCompletionResult> {
     // Sin credencial no tiene sentido salir a la red: se responde 503 de inmediato.
     if (this.missingApiKeyVar) {
       throw new ServiceUnavailableException(
         `AI provider (${this.providerName}) is not configured: ${this.missingApiKeyVar} is not set.`,
       );
+    }
+    const cacheKey = options?.cache
+      ? this.cacheKey(systemPrompt, userPrompt, maxOutputTokens, options)
+      : undefined;
+    if (cacheKey) {
+      const cached = await this.readCache(cacheKey);
+      if (cached && (options?.isUsable?.(cached.text) ?? true)) return cached;
     }
     if (this.circuitBreaker.isOpen(this.providerName)) {
       throw new ServiceUnavailableException(
@@ -75,8 +90,16 @@ export class AssessmentLlmClientService {
         maxOutputTokens,
         temperature,
         timeoutMs,
+        options,
       );
       this.circuitBreaker.recordSuccess(this.providerName);
+      if (
+        cacheKey &&
+        result.text.trim() &&
+        (options?.isUsable?.(result.text) ?? true)
+      ) {
+        await this.writeCache(cacheKey, result, options);
+      }
       return result;
     } catch (error) {
       const status =
@@ -98,6 +121,81 @@ export class AssessmentLlmClientService {
       throw new ServiceUnavailableException(
         `AI provider (${this.providerName}) request failed. Check AI_PROVIDER credentials.`,
       );
+    }
+  }
+
+  // ── Caché de respuestas ──────────────────────────────────────────────────
+
+  private cacheKey(
+    systemPrompt: string,
+    userPrompt: string,
+    maxOutputTokens: number,
+    options?: AiCompletionOptions,
+  ): string {
+    return createHash('sha256')
+      .update(
+        JSON.stringify([
+          this.providerName,
+          this.provider.modelFor?.(options) ?? '',
+          systemPrompt,
+          userPrompt,
+          maxOutputTokens,
+        ]),
+      )
+      .digest('hex');
+  }
+
+  private async readCache(key: string): Promise<AiCompletionResult | null> {
+    if (!this.prisma) return null;
+    try {
+      const since = new Date(Date.now() - AI_CACHE_TTL_DAYS * 86_400_000);
+      const row = await this.prisma.assessmentAiCache.findFirst({
+        where: { key, createdAt: { gte: since } },
+      });
+      if (!row) return null;
+      this.logger?.info('Assessment AI cache hit', {
+        provider: row.provider,
+        model: row.model,
+        tokensSaved: row.tokensUsed,
+      });
+      return { text: row.text, tokensUsed: 0, cached: true };
+    } catch {
+      // Sin caché (tabla no migrada, base caída): se llama al proveedor.
+      return null;
+    }
+  }
+
+  private async writeCache(
+    key: string,
+    result: AiCompletionResult,
+    options?: AiCompletionOptions,
+  ): Promise<void> {
+    if (!this.prisma) return;
+    try {
+      const data = {
+        provider: this.providerName,
+        model: this.provider.modelFor?.(options) ?? null,
+        text: result.text,
+        tokensUsed: result.tokensUsed ?? null,
+        createdAt: new Date(),
+      };
+      await this.prisma.assessmentAiCache.upsert({
+        where: { key },
+        create: { key, ...data },
+        update: data,
+      });
+      // Limpieza barata de lo vencido, para que la tabla no crezca sin fin.
+      await this.prisma.assessmentAiCache.deleteMany({
+        where: {
+          createdAt: {
+            lt: new Date(Date.now() - AI_CACHE_TTL_DAYS * 86_400_000),
+          },
+        },
+      });
+    } catch (error) {
+      this.logger?.warn('Assessment AI cache write failed', {
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

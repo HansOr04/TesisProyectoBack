@@ -16,6 +16,10 @@ export class NvidiaProvider implements AiProvider {
     private readonly model: string,
   ) {}
 
+  modelFor(): string {
+    return this.model;
+  }
+
   async complete(
     systemPrompt: string,
     userPrompt: string,

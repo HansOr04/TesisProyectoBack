@@ -1,3 +1,7 @@
+import {
+  AssessmentProfileScope,
+  isUnrestrictedScope,
+} from './assessment-access-scope.service';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 
@@ -67,16 +71,16 @@ export class ConsolidatedPlanService {
     filter: {
       profileId?: string;
       groupBy: 'tool' | 'profile';
-      /** Con alcance de evaluador, solo sus organizaciones asignadas. */
-      evaluatorId?: string;
+      /** Con alcance recortado, solo las organizaciones que el usuario ve. */
+      profileScope?: AssessmentProfileScope;
     },
   ): Promise<ConsolidatedMeasure[]> {
     const evaluation = {
       deletedAt: null,
       organisation,
       ...(filter.profileId ? { profileId: filter.profileId } : {}),
-      ...(filter.evaluatorId
-        ? { profile: { evaluatorId: filter.evaluatorId } }
+      ...(filter.profileScope && !isUnrestrictedScope(filter.profileScope)
+        ? { profile: filter.profileScope }
         : {}),
     };
     const evaluationLabels = {
@@ -281,7 +285,7 @@ export class ConsolidatedPlanService {
     organisation: string,
     scope: ConsolidatedPlanScope,
     profileId: string,
-    evaluatorId?: string,
+    profileScope: AssessmentProfileScope = {},
   ): Promise<
     | {
         title: string;
@@ -302,7 +306,7 @@ export class ConsolidatedPlanService {
     const rows = await this.measures(organisation, {
       profileId: byOrganisation ? profileId : undefined,
       groupBy: byOrganisation ? 'tool' : 'profile',
-      evaluatorId,
+      profileScope,
     });
 
     const groups = new Map<string, ConsolidatedMeasure[]>();

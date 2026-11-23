@@ -46,6 +46,12 @@ const ASSESSMENT_ROLE_DEFS: Record<
       ['read', 'write'].map((p) => `${m.code}:${p}`),
     ),
   },
+  assessment_viewer: {
+    name: 'Assessment Viewer',
+    description:
+      'Consulta, sin modificar, las organizaciones evaluadas que un administrador le habilita.',
+    permissions: ASSESSMENT_MODULES.map((m) => `${m.code}:read`),
+  },
 };
 
 async function seedAssessmentModulesAndPermissions(): Promise<

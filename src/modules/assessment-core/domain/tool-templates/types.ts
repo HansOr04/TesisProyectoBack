@@ -1,5 +1,5 @@
 export interface AssessmentSeedIndicator {
-  code: string; // p.ej. "AZ-1.3"
+  code: string; // p.ej. "KPI 1.3"
   name: string;
   description?: string;
   helpText?: string; // qué documento/proceso concreto debe existir para este KPI

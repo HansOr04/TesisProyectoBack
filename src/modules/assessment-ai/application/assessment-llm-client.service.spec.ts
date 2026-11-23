@@ -130,3 +130,131 @@ describe('AssessmentLlmClientService circuit breaker', () => {
     expect(result.text).toBe('ok');
   });
 });
+
+describe('AssessmentLlmClientService response cache', () => {
+  beforeEach(() => {
+    process.env.AI_PROVIDER = 'gemini';
+    process.env.GEMINI_API_KEY = 'test-key';
+  });
+
+  function setup() {
+    const httpService = {
+      post: jest.fn(() =>
+        of({
+          data: {
+            candidates: [{ content: { parts: [{ text: 'nuevo' }] } }],
+            usageMetadata: { totalTokenCount: 1200 },
+          },
+        } as AnyRecord),
+      ),
+    };
+    const rows = new Map<string, AnyRecord>();
+    const prisma = {
+      assessmentAiCache: {
+        findFirst: jest.fn(
+          async ({ where }: AnyRecord) => rows.get(where.key) ?? null,
+        ),
+        upsert: jest.fn(async ({ where, create }: AnyRecord) => {
+          rows.set(where.key, create);
+          return create;
+        }),
+        deleteMany: jest.fn(async () => ({ count: 0 })),
+      },
+    };
+    const client = new AssessmentLlmClientService(
+      httpService as unknown as HttpService,
+      createLoggerMock() as unknown as StructuredLoggerService,
+      prisma as AnyRecord as never,
+    );
+    return { client, httpService, prisma };
+  }
+
+  it('reuses the stored answer for the same prompt without calling the provider', async () => {
+    const { client, httpService } = setup();
+    const first = await client.complete('sys', 'user', 100, 0.1, 1000, {
+      cache: true,
+    });
+    const second = await client.complete('sys', 'user', 100, 0.1, 1000, {
+      cache: true,
+    });
+
+    expect(first).toMatchObject({ text: 'nuevo', tokensUsed: 1200 });
+    expect(second).toMatchObject({
+      text: 'nuevo',
+      tokensUsed: 0,
+      cached: true,
+    });
+    expect(httpService.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the provider again when the prompt changes', async () => {
+    const { client, httpService } = setup();
+    await client.complete('sys', 'nota 7', 100, 0.1, 1000, { cache: true });
+    await client.complete('sys', 'nota 8', 100, 0.1, 1000, { cache: true });
+
+    expect(httpService.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not read or write the cache unless asked', async () => {
+    const { client, httpService, prisma } = setup();
+    await client.complete('sys', 'user', 100, 0.1);
+    await client.complete('sys', 'user', 100, 0.1);
+
+    expect(httpService.post).toHaveBeenCalledTimes(2);
+    expect(prisma.assessmentAiCache.findFirst).not.toHaveBeenCalled();
+    expect(prisma.assessmentAiCache.upsert).not.toHaveBeenCalled();
+  });
+
+  it('does not store a response that the caller cannot read', async () => {
+    const { client, httpService, prisma } = setup();
+    const isUsable = (text: string) => text.startsWith('{');
+    await client.complete('sys', 'user', 100, 0.1, 1000, {
+      cache: true,
+      isUsable,
+    });
+    await client.complete('sys', 'user', 100, 0.1, 1000, {
+      cache: true,
+      isUsable,
+    });
+
+    expect(prisma.assessmentAiCache.upsert).not.toHaveBeenCalled();
+    expect(httpService.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('joins every text part of a Gemini answer, skipping thoughts', async () => {
+    const httpService = {
+      post: jest.fn(() =>
+        of({
+          data: {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    { text: 'pensando…', thought: true },
+                    { text: '{"a": ' },
+                    { text: '1}' },
+                  ],
+                },
+              },
+            ],
+            usageMetadata: {
+              totalTokenCount: 30,
+              promptTokenCount: 10,
+              candidatesTokenCount: 20,
+            },
+          },
+        } as AnyRecord),
+      ),
+    };
+    const client = new AssessmentLlmClientService(
+      httpService as unknown as HttpService,
+    );
+    const result = await client.complete('sys', 'user', 100, 0.1);
+
+    expect(result).toMatchObject({
+      text: '{"a": 1}',
+      inputTokens: 10,
+      outputTokens: 20,
+    });
+  });
+});

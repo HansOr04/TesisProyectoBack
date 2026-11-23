@@ -47,7 +47,8 @@ const RESERVED = new Set([
 
 /**
  * Alta y mantenimiento de organizaciones (inquilinos) desde la API, reservado
- * al superadministrador global. Crear una organización no es insertar una
+ * al superadministrador global. Cada superadministrador ve y administra solo
+ * los proyectos que creó. Crear una organización no es insertar una
  * fila: hay que dejarla operativa (plantillas, parámetros de riesgo,
  * administrador con su rol), y eso es lo que hace `create` en una sola
  * transacción lógica.
@@ -62,9 +63,10 @@ export class OrganisationManagementService {
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasherPort,
   ) {}
 
-  async list(): Promise<OrganisationView[]> {
+  /** Proyectos que creó este superadministrador: solo esos administra. */
+  async list(actorId: string): Promise<OrganisationView[]> {
     const rows = await this.prisma.organisation.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, createdById: actorId },
       orderBy: { createdAt: 'asc' },
       include: {
         _count: {
@@ -89,8 +91,8 @@ export class OrganisationManagementService {
     }));
   }
 
-  async get(id: string): Promise<OrganisationView> {
-    const found = (await this.list()).find((o) => o.id === id);
+  async get(id: string, actorId: string): Promise<OrganisationView> {
+    const found = (await this.list(actorId)).find((o) => o.id === id);
     if (!found) {
       throw new NotFoundException('Organización no encontrada');
     }
@@ -124,7 +126,7 @@ export class OrganisationManagementService {
     }
 
     const organisation = await this.prisma.organisation.create({
-      data: { id, name: input.name.trim() },
+      data: { id, name: input.name.trim(), createdById: actor.id },
     });
 
     // Sin plantillas no se puede iniciar ninguna evaluación: se aprovisiona
@@ -145,7 +147,11 @@ export class OrganisationManagementService {
       actor.id,
     );
 
-    return { organisation: await this.get(organisation.id), templates, admin };
+    return {
+      organisation: await this.get(organisation.id, actor.id),
+      templates,
+      admin,
+    };
   }
 
   /** Datos editables del alta. El identificador no cambia: vive en las URLs. */
@@ -155,7 +161,7 @@ export class OrganisationManagementService {
     actor: { id: string },
   ): Promise<OrganisationView> {
     const before = await this.prisma.organisation.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, createdById: actor.id },
     });
     if (!before) {
       throw new NotFoundException('Organización no encontrada');
@@ -173,7 +179,7 @@ export class OrganisationManagementService {
         actor.id,
       );
     }
-    return this.get(id);
+    return this.get(id, actor.id);
   }
 
   /**
@@ -186,7 +192,7 @@ export class OrganisationManagementService {
     actor: { id: string },
   ): Promise<ProvisionedTemplate[]> {
     const organisation = await this.prisma.organisation.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, createdById: actor.id },
     });
     if (!organisation) {
       throw new NotFoundException('Organización no encontrada');
@@ -199,6 +205,31 @@ export class OrganisationManagementService {
       actor.id,
     );
     return templates;
+  }
+
+  /**
+   * Usuarios activos de la plataforma, para asignarlos a un proyecto sin
+   * tener que volver a crearlos. Solo datos de contacto, nunca credenciales.
+   */
+  async assignableUsers(search?: string) {
+    const term = search?.trim();
+    return this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        ...(term
+          ? {
+              OR: [
+                { email: { contains: term, mode: 'insensitive' } },
+                { name: { contains: term, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, email: true, name: true, isSuperAdmin: true },
+      orderBy: { email: 'asc' },
+      take: 200,
+    });
   }
 
   /** Crea o reutiliza al administrador inicial y le da el rol en la organización. */

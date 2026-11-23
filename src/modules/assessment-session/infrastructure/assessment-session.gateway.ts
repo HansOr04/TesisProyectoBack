@@ -10,6 +10,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { TOKEN_ISSUER, TokenIssuerPort } from '../../identity/domain/ports';
 import { AssessmentAccessScopeService } from '../../assessment-core/application/assessment-access-scope.service';
+import { resolveOrganisationAccess } from '../../identity/application/organisation-access';
+import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import {
   RealtimeNotifierPort,
   ScoreUpdatedEvent,
@@ -39,6 +41,7 @@ export class AssessmentSessionGateway
   constructor(
     @Inject(TOKEN_ISSUER) private readonly tokens: TokenIssuerPort,
     private readonly accessScope: AssessmentAccessScopeService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -73,10 +76,12 @@ export class AssessmentSessionGateway
     if (!socketAuth || !body?.org || !body?.evaluationId) {
       return;
     }
-    if (
-      !socketAuth.isSuperAdmin &&
-      !socketAuth.organisations.includes(body.org)
-    ) {
+    const access = await resolveOrganisationAccess(
+      this.prisma,
+      socketAuth,
+      body.org,
+    );
+    if (!access.allowed) {
       client.emit('error', { message: 'Not a member of this organisation' });
       return;
     }
@@ -84,7 +89,7 @@ export class AssessmentSessionGateway
       const scope = await this.accessScope.resolveProfileScope(
         body.org,
         socketAuth.userId,
-        socketAuth.isSuperAdmin,
+        access.isSuperAdmin,
       );
       await this.accessScope.assertInScope(
         body.org,
