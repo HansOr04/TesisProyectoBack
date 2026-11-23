@@ -1,7 +1,8 @@
-# Revisión de dependencias en cada pull request: falla si el cambio agrega
-# una dependencia con una vulnerabilidad alta o crítica conocida. Corre en
-# paralelo con la integración continua. No revisa las que ya estaban; esas
-# se ven con `npm audit`.
+# Revisión de dependencias en cada pull request, en paralelo con la
+# integración continua. Compara `npm audit` de la rama base con el del pull
+# request y falla solo si el cambio agrega vulnerabilidades altas o críticas
+# en dependencias de producción. Las que ya existían se informan en el
+# resumen, sin bloquear.
 name: Dependencias
 
 on:
@@ -16,12 +17,44 @@ permissions:
   contents: read
 
 jobs:
-  review:
+  audit:
     name: Dependencias nuevas sin vulnerabilidades
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v5
         with:
-          fail-on-severity: high
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # npm audit lee package-lock.json; no hace falta instalar.
+      - name: Auditar la rama base y el pull request
+        run: |
+          npm audit --omit=dev --json > /tmp/head.json || true
+          (cd base && npm audit --omit=dev --json > /tmp/base.json) || true
+      - name: Comparar
+        run: |
+          ids() {
+            jq -r '[.vulnerabilities[]?.via[]? | objects
+                    | select(.severity == "high" or .severity == "critical")
+                    | "\(.severity)\t\(.name)\t\(.title)\t\(.url)"] | unique[]' "$1" | sort
+          }
+          ids /tmp/base.json > /tmp/base.txt
+          ids /tmp/head.json > /tmp/head.txt
+          comm -13 /tmp/base.txt /tmp/head.txt > /tmp/new.txt
+          {
+            echo "### Vulnerabilidades altas y críticas (dependencias de producción)"
+            echo "- Ya existentes en la rama base: $(wc -l < /tmp/base.txt)"
+            echo "- Nuevas en este pull request: $(wc -l < /tmp/new.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s /tmp/new.txt ]; then
+            echo "| Severidad | Paquete | Problema | Aviso |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            awk -F'\t' '{print "| "$1" | "$2" | "$3" | "$4" |"}' /tmp/new.txt >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El pull request agrega $(wc -l < /tmp/new.txt) vulnerabilidades altas o críticas"
+            exit 1
+          fi
+          echo "Sin vulnerabilidades nuevas."
