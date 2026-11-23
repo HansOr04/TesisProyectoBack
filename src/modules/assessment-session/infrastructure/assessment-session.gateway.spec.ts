@@ -22,6 +22,10 @@ describe('AssessmentSessionGateway', () => {
   let gateway: AssessmentSessionGateway;
   let verify: jest.Mock;
   let accessScope: { resolveProfileScope: jest.Mock; assertInScope: jest.Mock };
+  let prisma: {
+    organisation: { count: jest.Mock };
+    organisationMember: { findUnique: jest.Mock };
+  };
 
   beforeEach(() => {
     verify = jest.fn();
@@ -29,9 +33,14 @@ describe('AssessmentSessionGateway', () => {
       resolveProfileScope: jest.fn().mockResolvedValue({}),
       assertInScope: jest.fn().mockResolvedValue(undefined),
     };
+    prisma = {
+      organisation: { count: jest.fn().mockResolvedValue(0) },
+      organisationMember: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
     gateway = new AssessmentSessionGateway(
       { verify, sign: jest.fn() },
       accessScope as any,
+      prisma as any,
     );
   });
 
@@ -114,13 +123,51 @@ describe('AssessmentSessionGateway', () => {
       expect(client.emit).toHaveBeenCalledWith('error', expect.any(Object));
     });
 
-    it('lets a superadmin join any org', async () => {
+    it('lets a superadmin join a project they created, with full scope', async () => {
+      prisma.organisation.count.mockResolvedValue(1);
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
         email: 'e',
         organisations: [],
         isSuperAdmin: true,
+      };
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
+      expect(accessScope.resolveProfileScope).toHaveBeenCalledWith(
+        'demo',
+        'u',
+        true,
+      );
+      expect(client.join).toHaveBeenCalledWith('eval:ev-1');
+    });
+
+    it('keeps a superadmin out of a project created by someone else', async () => {
+      const client = createMockSocket();
+      client.data.auth = {
+        userId: 'u',
+        email: 'e',
+        organisations: [],
+        isSuperAdmin: true,
+      };
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
+      expect(client.join).not.toHaveBeenCalled();
+      expect(client.emit).toHaveBeenCalledWith('error', expect.any(Object));
+    });
+
+    it('lets a member just added to the project join without a new token', async () => {
+      prisma.organisationMember.findUnique.mockResolvedValue({ id: 'm' });
+      const client = createMockSocket();
+      client.data.auth = {
+        userId: 'u',
+        email: 'e',
+        organisations: [],
+        isSuperAdmin: false,
       };
       await gateway.handleJoin(client as any, {
         org: 'demo',

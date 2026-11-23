@@ -2,20 +2,30 @@ import { buildFormattedWorkbook } from '../../../../shared/infrastructure/report
 import {
   addCoverSlide,
   addEvolutionSlide,
+  addExecutiveReadingSlide,
   addExecutiveSummarySlide,
-  addGaugeSlide,
+  addGlobalResultsSlide,
   addNumberedListSlide,
-  addSectionScoresSlide,
+  addPlanSummarySlide,
+  addSectionDetailSlide,
+  addSwotSlide,
   addTableSlide,
   addTimelineSlide,
   createReportPptx,
+  InsightPoint,
+  pctLabel,
   REPORT_COLORS,
+  scorePct,
   TableCell,
   tierColor,
   TimelineMeasure,
   writePptxBuffer,
 } from '../../../../shared/infrastructure/reports/pptx-report.util';
-import { AiReportInsights } from '../../domain/evaluation-tool-ai.types';
+import {
+  AiReportInsights,
+  AiSwot,
+  countryName,
+} from '../../domain/evaluation-tool-ai.types';
 import { EvaluationToolDefinition } from '../../domain/evaluation-tool.definition';
 import {
   EvaluationWithStructure,
@@ -200,7 +210,10 @@ export interface SummaryPptxInput {
     measuresDone: number;
   }[];
   narrative: string;
+  /** La síntesis la escribió (o eligió) el usuario: va tal cual al cierre. */
+  customNarrative?: boolean;
   insights: AiReportInsights | null;
+  swot?: AiSwot | null;
   /**
    * Plan consolidado que reemplaza al Gantt propio de la herramienta cuando
    * al exportar se pide un alcance mayor (la organización o el proyecto).
@@ -212,53 +225,281 @@ export interface SummaryPptxInput {
   };
 }
 
-/** Hallazgos y análisis por sección del asistente, si se generaron. */
-export function addInsightSlides(
-  pptx: ReturnType<typeof createReportPptx>,
+type Pptx = ReturnType<typeof createReportPptx>;
+
+export function createToolReport(
   definition: EvaluationToolDefinition,
-  sectionScores: SectionScoreResult[],
-  insights: AiReportInsights | null,
+  evaluation: EvaluationWithStructure,
+): Pptx {
+  return createReportPptx(
+    `${evaluation.profile.name} · ${definition.displayName}`,
+    {
+      accentColor: definition.report.accentColor,
+      orgName: evaluation.profile.name,
+    },
+  );
+}
+
+export function addToolCoverSlide(
+  pptx: Pptx,
+  definition: EvaluationToolDefinition,
+  evaluation: EvaluationWithStructure,
 ): void {
-  if (!insights) return;
-  if (insights.keyFindings.length > 0) {
+  const p = evaluation.profile;
+  addCoverSlide(pptx, {
+    tool: definition.displayName,
+    orgName: p.name,
+    subtitle: definition.report.subtitle,
+    status: STATUS_LABEL[evaluation.status] ?? evaluation.status,
+    date: reportDate(),
+    place: [p.region, countryName(p.country)].filter(Boolean).join(', '),
+  });
+}
+
+function sectionTitle(
+  definition: EvaluationToolDefinition,
+  s: { number: number; name: string },
+): string {
+  return `${definition.section.singular} ${s.number}: ${s.name}`;
+}
+
+function responsesOf(
+  evaluation: EvaluationWithStructure,
+  sectionId: string,
+): EvaluationWithStructure['responses'] {
+  const section = evaluation.template.sections.find((s) => s.id === sectionId);
+  const ids = new Set(section?.indicators.map((i) => i.id) ?? []);
+  return evaluation.responses.filter((r) => ids.has(r.indicatorId));
+}
+
+function shortObservation(text: string | null | undefined, max = 110) {
+  const t = text?.trim() ?? '';
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
+/**
+ * Fortalezas y brechas de una sección a partir de sus KPI, cuando la IA no
+ * las dio: los mejor calificados (nivel alto) y los peor calificados.
+ */
+function sectionPointsFromData(
+  responses: EvaluationWithStructure['responses'],
+): { strengths: InsightPoint[]; gaps: InsightPoint[] } {
+  const point = (r: EvaluationWithStructure['responses'][number]) => {
+    const observation = shortObservation(r.observation);
+    return {
+      title: `${r.indicator.code} · ${pctLabel(r.score)}`,
+      detail: observation
+        ? `${r.indicator.name} ${observation}`
+        : r.indicator.name,
+    };
+  };
+  return {
+    strengths: [...responses]
+      .filter((r) => r.score >= 7)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(point),
+    gaps: [...responses]
+      .filter((r) => r.score < 7)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 3)
+      .map(point),
+  };
+}
+
+/** Lectura general sin IA: las secciones con mejor y peor resultado. */
+function generalPointsFromData(
+  evaluation: EvaluationWithStructure,
+  sectionScores: SectionScoreResult[],
+): { strengths: InsightPoint[]; gaps: InsightPoint[] } {
+  const describe = (s: SectionScoreResult, best: boolean) => {
+    const responses = [...responsesOf(evaluation, s.sectionId)].sort((a, b) =>
+      best ? b.score - a.score : a.score - b.score,
+    );
+    const kpi = responses[0];
+    return {
+      title: `${s.name} (${pctLabel(s.weightedAvg)})`,
+      detail: kpi
+        ? `${best ? 'Destaca' : 'Lo más bajo'}: ${kpi.indicator.name}`
+        : 'Sin KPI calificados.',
+    };
+  };
+  const sorted = [...sectionScores].sort(
+    (a, b) => b.weightedAvg - a.weightedAvg,
+  );
+  return {
+    strengths: sorted
+      .filter((s) => s.weightedAvg >= 7)
+      .slice(0, 4)
+      .map((s) => describe(s, true)),
+    gaps: [...sorted]
+      .reverse()
+      .filter((s) => s.weightedAvg < 7)
+      .slice(0, 4)
+      .map((s) => describe(s, false)),
+  };
+}
+
+/**
+ * Láminas de resultados comunes a todas las herramientas: resultados
+ * globales en barras, lectura ejecutiva, una lámina por sección con su
+ * semáforo y los hallazgos clave.
+ */
+export function addResultSlides(
+  pptx: Pptx,
+  definition: EvaluationToolDefinition,
+  input: {
+    evaluation: EvaluationWithStructure;
+    sectionScores: SectionScoreResult[];
+    globalScore: number;
+    insights: AiReportInsights | null;
+    narrative: string;
+    customNarrative?: boolean;
+  },
+): void {
+  const { evaluation, sectionScores, globalScore, insights } = input;
+  const sectionLabel = definition.section.singular;
+  const critical = evaluation.responses.filter((r) => r.isCritical).length;
+  const sorted = [...sectionScores].sort(
+    (a, b) => b.weightedAvg - a.weightedAvg,
+  );
+  const best = sorted[0];
+  const worst = sorted[sorted.length - 1];
+
+  // Segunda lámina: el resultado global y la síntesis (la que se escribió en
+  // la aplicación o, si no, la narrativa automática con los porcentajes).
+  addExecutiveSummarySlide(pptx, {
+    kicker: definition.displayName,
+    title: 'Resumen ejecutivo',
+    globalScore,
+    level: scoreLevelPhrase(definition, globalScore),
+    narrative: input.narrative,
+  });
+
+  addGlobalResultsSlide(pptx, {
+    kicker: 'Diagnóstico integral',
+    title: `Resultados globales por ${sectionLabel.toLowerCase()}`,
+    subtitle: `${definition.displayName} · ${sectionScores.length} ${definition.section.plural.toLowerCase()} · resultados en porcentaje de cumplimiento`,
+    items: sectionScores.map((s) => ({
+      label: `${s.number}. ${s.name}`,
+      score: s.weightedAvg,
+    })),
+    globalScore,
+    cards: [
+      ...(best
+        ? [
+            {
+              label: 'Mejor desempeño',
+              caption: best.name,
+              score: best.weightedAvg,
+              tag: 'Top',
+            },
+          ]
+        : []),
+      ...(worst && worst !== best
+        ? [
+            {
+              label: 'Mayor brecha',
+              caption: worst.name,
+              score: worst.weightedAvg,
+              tag: worst.weightedAvg <= 5 ? 'Crítico' : 'A mejorar',
+            },
+          ]
+        : []),
+      {
+        label: 'Resultado global',
+        caption: scoreLevelPhrase(definition, globalScore),
+        score: globalScore,
+        color: definition.report.accentColor,
+      },
+      {
+        label: 'KPI críticos',
+        caption: `de ${evaluation.responses.length} KPI evaluados`,
+        value: String(critical),
+        color: critical > 0 ? REPORT_COLORS.tierRed : REPORT_COLORS.tierGreen,
+      },
+    ],
+  });
+
+  const fromData = generalPointsFromData(evaluation, sectionScores);
+  // La síntesis ya va en el resumen ejecutivo; aquí va la lectura de cierre.
+  const closing =
+    insights?.conclusion ||
+    (best && worst && best !== worst
+      ? `La asociación alcanza un resultado global de ${pctLabel(globalScore)} (${scoreLevelPhrase(definition, globalScore).toLowerCase()}). Su mejor desempeño está en ${best.name} (${pctLabel(best.weightedAvg)}) y la mayor brecha en ${worst.name} (${pctLabel(worst.weightedAvg)}), que es donde conviene priorizar el plan de acción.`
+      : `La asociación alcanza un resultado global de ${pctLabel(globalScore)} (${scoreLevelPhrase(definition, globalScore).toLowerCase()}).`);
+  addExecutiveReadingSlide(pptx, {
+    kicker: 'Lectura ejecutiva',
+    title: 'Lectura ejecutiva del diagnóstico',
+    strengths: insights?.strengths?.length
+      ? insights.strengths
+      : fromData.strengths,
+    gaps: insights?.gaps?.length ? insights.gaps : fromData.gaps,
+    closingTitle: `Conclusión · Resultado global ${pctLabel(globalScore)}`,
+    closing,
+    globalScore,
+  });
+
+  const weightTotal = sectionScores.reduce((sum, s) => sum + s.weight, 0) || 1;
+  for (const s of [...sectionScores].sort((a, b) => a.number - b.number)) {
+    const section = evaluation.template.sections.find(
+      (sec) => sec.id === s.sectionId,
+    );
+    const responses = responsesOf(evaluation, s.sectionId);
+    const ai = insights?.sectionInsights?.[String(s.number)];
+    const data = sectionPointsFromData(responses);
+    addSectionDetailSlide(pptx, {
+      kicker:
+        s.weightedAvg <= 5
+          ? 'Área crítica identificada'
+          : `Resultados por ${sectionLabel.toLowerCase()}`,
+      title: sectionTitle(definition, s),
+      subtitle: `${responses.length} de ${section?.indicators.length ?? responses.length} KPI calificados`,
+      score: s.weightedAvg,
+      strengths: ai?.strengths?.length ? ai.strengths : data.strengths,
+      gaps: ai?.gaps?.length ? ai.gaps : data.gaps,
+      facts: [
+        { label: 'KPI evaluados', value: String(responses.length) },
+        {
+          label: 'KPI críticos',
+          value: String(responses.filter((r) => r.isCritical).length),
+        },
+        {
+          label: 'Peso en el resultado',
+          value: `${Math.round((s.weight / weightTotal) * 100)} %`,
+        },
+      ],
+      note: insights?.sectionAnalysis?.[String(s.number)],
+    });
+  }
+
+  if (insights && insights.keyFindings.length > 0) {
     addNumberedListSlide(pptx, {
+      kicker: 'Análisis',
       title: 'Hallazgos clave',
       items: insights.keyFindings,
     });
   }
-  const analysisRows: TableCell[][] = sectionScores
-    .filter((s) => insights.sectionAnalysis[String(s.number)])
-    .map((s) => [
-      `${s.number}. ${s.name}`,
-      {
-        text: s.weightedAvg.toFixed(1),
-        bold: true,
-        color: tierColor(s.weightedAvg),
-        align: 'center',
-      },
-      insights.sectionAnalysis[String(s.number)],
-    ]);
-  if (analysisRows.length > 0) {
-    addTableSlide(pptx, {
-      title: `Análisis por ${definition.section.singular.toLowerCase()}`,
-      columns: [
-        { header: definition.section.singular, weight: 3 },
-        { header: 'Nota', weight: 0.8, align: 'center' },
-        { header: 'Lectura', weight: 8 },
-      ],
-      rows: analysisRows,
-      emptyText: '',
-      rowsPerSlide: 4,
-    });
-  }
 }
 
-export function addRecommendationSlides(
-  pptx: ReturnType<typeof createReportPptx>,
+/** FODA y recomendaciones, al cierre del reporte. */
+export function addClosingSlides(
+  pptx: Pptx,
+  evaluation: EvaluationWithStructure,
   insights: AiReportInsights | null,
+  swot: AiSwot | null | undefined,
 ): void {
+  if (swot) {
+    addSwotSlide(pptx, {
+      kicker: 'Análisis estratégico',
+      title: 'Análisis FODA',
+      subtitle: `${evaluation.profile.name} · fortalezas y debilidades según la evaluación; oportunidades y amenazas del contexto`,
+      swot,
+    });
+  }
   if (insights && insights.recommendations.length > 0) {
     addNumberedListSlide(pptx, {
+      kicker: 'Próximos pasos',
       title: 'Recomendaciones',
       items: insights.recommendations,
     });
@@ -271,13 +512,7 @@ export function sectionRowsFor(
 ) {
   const weightTotal = sectionScores.reduce((sum, x) => sum + x.weight, 0) || 1;
   return sectionScores.map((s) => {
-    const section = evaluation.template.sections.find(
-      (sec) => sec.id === s.sectionId,
-    );
-    const ids = new Set(section?.indicators.map((i) => i.id) ?? []);
-    const responses = evaluation.responses.filter((r) =>
-      ids.has(r.indicatorId),
-    );
+    const responses = responsesOf(evaluation, s.sectionId);
     return {
       label: `${s.number}. ${s.name}`,
       weightPct: Math.round((s.weight / weightTotal) * 100),
@@ -318,69 +553,40 @@ export function planStatusCell(measures: Array<{ status: string }>): TableCell {
   return { ...PLAN_STATUS[key], bold: true };
 }
 
+/** Celda del resultado de un KPI en porcentaje, con su color de nivel. */
+export function scoreCell(score: number | undefined): TableCell {
+  return score === undefined
+    ? { text: '—', align: 'center' }
+    : {
+        text: `${scorePct(score)} %`,
+        bold: true,
+        color: tierColor(score),
+        align: 'center',
+      };
+}
+
 /**
- * Reporte en diapositivas: portada, resumen, velocímetros, detalle por
- * sección, hallazgos, KPI críticos, plan de acción, evolución y
- * recomendaciones.
+ * Reporte en diapositivas: portada, resultados globales, lectura ejecutiva,
+ * una lámina por sección, hallazgos, KPI críticos, resumen y cronograma del
+ * plan de acción, evolución, FODA y recomendaciones.
  */
 export async function buildSummaryPptx(
   definition: EvaluationToolDefinition,
   input: SummaryPptxInput,
 ): Promise<FileExport> {
-  const { evaluation, sectionScores, globalScore, measures, insights } = input;
+  const { evaluation, measures, insights } = input;
   const criticalResponses = evaluation.responses.filter((r) => r.isCritical);
   const sectionLabel = definition.section.singular;
   const sectionOf = sectionByIndicator(evaluation);
-  const doneMeasures = measures.filter((m) => m.status === 'DONE').length;
-
-  const pptx = createReportPptx(
-    `${evaluation.profile.name} · ${definition.displayName}`,
+  const codeOf = new Map(
+    evaluation.template.sections
+      .flatMap((s) => s.indicators)
+      .map((i) => [i.id, i.code]),
   );
 
-  addCoverSlide(pptx, {
-    tool: definition.displayName,
-    orgName: evaluation.profile.name,
-    subtitle: definition.report.subtitle,
-    status: STATUS_LABEL[evaluation.status] ?? evaluation.status,
-    date: reportDate(),
-  });
-
-  addExecutiveSummarySlide(pptx, {
-    title: 'Resumen ejecutivo',
-    globalScore,
-    level: scoreLevelPhrase(definition, globalScore),
-    facts: [
-      { label: 'KPI evaluados', value: String(evaluation.responses.length) },
-      { label: 'KPI críticos', value: String(criticalResponses.length) },
-      {
-        label: `${definition.section.plural} evaluadas`,
-        value: `${sectionScores.length} de ${evaluation.template.sections.length}`,
-      },
-      {
-        label: 'Medidas concluidas',
-        value: `${doneMeasures} de ${measures.length}`,
-      },
-    ],
-    narrative: input.narrative,
-  });
-
-  addGaugeSlide(pptx, {
-    title: `Puntaje por ${sectionLabel.toLowerCase()}`,
-    subtitle: 'Escala de 0 a 10, con los mismos cortes que usa la aplicación',
-    items: sectionScores.map((s) => ({
-      label: `${s.number}. ${s.name}`,
-      score: s.weightedAvg,
-    })),
-  });
-
-  addSectionScoresSlide(pptx, {
-    title: `Detalle por ${sectionLabel.toLowerCase()}`,
-    subtitle: 'Peso en el puntaje global, nota y KPI críticos de cada una',
-    sectionLabel,
-    rows: sectionRowsFor(evaluation, sectionScores),
-  });
-
-  addInsightSlides(pptx, definition, sectionScores, insights);
+  const pptx = createToolReport(definition, evaluation);
+  addToolCoverSlide(pptx, definition, evaluation);
+  addResultSlides(pptx, definition, input);
 
   const measuresByIndicator = new Map<string, IndicatorMeasureRecord[]>();
   for (const measure of measures) {
@@ -395,50 +601,59 @@ export async function buildSummaryPptx(
     (r) => (measuresByIndicator.get(r.indicatorId) ?? []).length === 0,
   ).length;
   addTableSlide(pptx, {
+    kicker: 'Prioridades',
     title: 'KPI críticos',
-    subtitle: 'Ordenados de la nota más baja a la más alta',
+    subtitle: 'Ordenados del resultado más bajo al más alto',
     summary: [
       { text: `${criticalResponses.length} KPI críticos` },
       {
         text: `${withoutMeasure} sin medida en el plan`,
-        color: REPORT_COLORS.tierRed,
+        color:
+          withoutMeasure > 0 ? REPORT_COLORS.tierRed : REPORT_COLORS.tierGreen,
       },
     ],
     columns: [
-      { header: 'Código', weight: 1 },
+      { header: 'KPI', weight: 1 },
       { header: 'Indicador', weight: 3.6 },
-      { header: sectionLabel, weight: 2.6 },
-      { header: 'Nota', weight: 0.8, align: 'center' },
+      { header: sectionLabel, weight: 2.4 },
+      { header: 'Resultado', weight: 1.1, align: 'center' },
       { header: 'Observación', weight: 3.4 },
       { header: 'Plan de acción', weight: 1.4, align: 'center' },
     ],
     rows: sortedCritical.map((r) => {
       const section = sectionOf.get(r.indicatorId);
-      const observation = r.observation?.trim() ?? '';
       return [
         { text: r.indicator.code, bold: true },
         r.indicator.name,
         section ? `${section.number}. ${section.name}` : '',
-        {
-          text: r.score.toFixed(1),
-          bold: true,
-          color: tierColor(r.score),
-          align: 'center',
-        },
-        observation.length > 150
-          ? `${observation.slice(0, 149).trimEnd()}…`
-          : observation,
+        scoreCell(r.score),
+        shortObservation(r.observation, 150),
         planStatusCell(measuresByIndicator.get(r.indicatorId) ?? []),
       ];
     }),
     emptyText: 'La evaluación no tiene KPI críticos.',
-    rowsPerSlide: 7,
+    rowsPerSlide: 10,
   });
 
-  addTimelineSlide(
-    pptx,
-    input.consolidatedGantt ?? {
-      title: 'Avance del plan de acción',
+  addPlanSummarySlide(pptx, {
+    kicker: 'Plan de acción',
+    title: 'Resumen del plan de acción',
+    subtitle: 'Medidas registradas para atender los KPI críticos',
+    measures: measures.map((m) => ({
+      name: m.name,
+      kpi: codeOf.get(m.indicatorId),
+      responsible: m.responsible,
+      endDate: m.endDate,
+      status: m.status,
+      progressPct: m.progressPct,
+    })),
+    uncovered: { label: 'KPI críticos sin medida', value: withoutMeasure },
+  });
+
+  addTimelineSlide(pptx, {
+    kicker: 'Plan de acción',
+    ...(input.consolidatedGantt ?? {
+      title: 'Cronograma del plan de acción',
       measures: measures.map((m) => ({
         name: m.name,
         detail: m.responsible,
@@ -447,17 +662,18 @@ export async function buildSummaryPptx(
         status: m.status,
         progressPct: m.progressPct,
       })),
-    },
-  );
+    }),
+  });
 
   if (input.history.length > 1) {
     addEvolutionSlide(pptx, {
+      kicker: 'Seguimiento',
       title: 'Evolución en el tiempo',
       points: evolutionPoints(input.history),
     });
   }
 
-  addRecommendationSlides(pptx, insights);
+  addClosingSlides(pptx, evaluation, insights, input.swot);
 
   return {
     filename: `reporte-${definition.slug}-${evaluation.id}.pptx`,

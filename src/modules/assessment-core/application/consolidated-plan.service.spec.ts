@@ -104,7 +104,7 @@ describe('ConsolidatedPlanService', () => {
   });
 
   it('con alcance de evaluador, el Gantt del proyecto solo lee sus organizaciones', async () => {
-    await service.gantt('demo', 'project', 'p1', 'eval-1');
+    await service.gantt('demo', 'project', 'p1', { evaluatorId: 'eval-1' });
     const scoped = {
       deletedAt: null,
       organisation: 'demo',

@@ -139,7 +139,7 @@ describe('parseAiReportInsights (anti-hallucination guard)', () => {
 
     const result = parseAiReportInsights(raw, ['1', '2']);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       keyFindings: ['Hallazgo 1', 'Hallazgo 2'],
       sectionAnalysis: {
         '1': 'Análisis principio 1',
@@ -183,6 +183,10 @@ describe('parseAiReportInsights (anti-hallucination guard)', () => {
       keyFindings: [],
       sectionAnalysis: {},
       recommendations: [],
+      strengths: [],
+      gaps: [],
+      conclusion: '',
+      sectionInsights: {},
     });
   });
 

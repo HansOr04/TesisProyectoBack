@@ -16,7 +16,10 @@ import { PrismaService } from '../../../shared/infrastructure/database/prisma.se
 import {
   ASSESSMENT_ROLE_CODES,
   AssessmentRoleCode,
+  ViewerVisibility,
+  readViewerVisibility,
 } from '../../assessment-core/domain/assessment.constants';
+import { AssessmentAuditService } from '../../assessment-core/application/assessment-audit.service';
 import { AssessmentRolesService } from '../../assessment-core/application/assessment-roles.service';
 import { PASSWORD_HASHER, PasswordHasherPort } from '../domain/ports';
 
@@ -29,7 +32,13 @@ export interface OrganisationUserView {
   hasPassword: boolean;
   oauthProvider: string | null;
   createdAt: Date;
-  roles: { assignmentId: string; code: string; name: string }[];
+  roles: {
+    assignmentId: string;
+    code: string;
+    name: string;
+    /** Solo en el rol de visualizador: qué organizaciones evaluadas ve. */
+    visibility?: ViewerVisibility;
+  }[];
 }
 
 interface Actor {
@@ -47,6 +56,7 @@ export class UserManagementService {
     private readonly rolesService: AssessmentRolesService,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasherPort,
     private readonly refreshTokens: RefreshTokenService,
+    private readonly auditService: AssessmentAuditService,
   ) {}
 
   async listMembers(
@@ -113,13 +123,18 @@ export class UserManagementService {
           'Ese correo ya pertenece a esta organización',
         );
       }
+      // Asignar una cuenta existente no cambia su contraseña: si no, quien
+      // administra un proyecto podría quedarse con la cuenta de cualquiera.
+      if (input.password) {
+        throw new ConflictException(
+          'Ese correo ya tiene una cuenta; asígnalo sin contraseña y conservará la suya',
+        );
+      }
+      this.assertCanManageSuperAdmin(user, actor);
       // Usuario existente en otra organización: se agrega como miembro.
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          ...(input.password
-            ? { passwordHash: await this.hasher.hash(input.password) }
-            : {}),
           ...(input.isSuperAdmin !== undefined && actor.isSuperAdmin
             ? { isSuperAdmin: input.isSuperAdmin }
             : {}),
@@ -171,6 +186,19 @@ export class UserManagementService {
         'Solo un superadministrador puede cambiar superadmin',
       );
     }
+    // El rol dentro del proyecto sí lo gestiona su administrador; la cuenta
+    // de un superadministrador (nombre, contraseña, activación) no.
+    if (
+      input.name !== undefined ||
+      input.password ||
+      input.isActive !== undefined
+    ) {
+      const target = await this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { isSuperAdmin: true },
+      });
+      this.assertCanManageSuperAdmin(target, actor);
+    }
     if (
       userId === actor.id &&
       (input.isActive === false || input.isSuperAdmin === false)
@@ -202,6 +230,17 @@ export class UserManagementService {
     return this.getMember(organisation, userId);
   }
 
+  private assertCanManageSuperAdmin(
+    target: { isSuperAdmin: boolean },
+    actor: Actor,
+  ): void {
+    if (target.isSuperAdmin && !actor.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo un superadministrador puede modificar la cuenta de otro superadministrador',
+      );
+    }
+  }
+
   async removeMember(
     organisation: string,
     userId: string,
@@ -220,6 +259,59 @@ export class UserManagementService {
         organisationId_userId: { organisationId: organisation, userId },
       },
     });
+  }
+
+  /**
+   * Qué organizaciones evaluadas ve un visualizador: todas las del proyecto o
+   * una lista. Se guarda en su asignación de rol, así que solo aplica a
+   * quien tiene el rol de visualizador.
+   */
+  async setViewerVisibility(
+    organisation: string,
+    userId: string,
+    input: ViewerVisibility,
+    actor: Actor,
+  ): Promise<OrganisationUserView> {
+    await this.assertMember(organisation, userId);
+    const assignment = await this.prisma.authUserRole.findFirst({
+      where: {
+        organisation,
+        userId,
+        deletedAt: null,
+        role: { code: 'assessment_viewer' },
+      },
+    });
+    if (!assignment) {
+      throw new ConflictException(
+        'Solo se define la visibilidad de un usuario con rol de visualizador',
+      );
+    }
+    const profileIds = input.allProfiles ? [] : [...new Set(input.profileIds)];
+    if (profileIds.length > 0) {
+      const found = await this.prisma.assessmentOrganisationProfile.count({
+        where: { organisation, deletedAt: null, id: { in: profileIds } },
+      });
+      if (found !== profileIds.length) {
+        throw new NotFoundException(
+          'Alguna organización evaluada no existe en este proyecto',
+        );
+      }
+    }
+    const visibility: ViewerVisibility = {
+      allProfiles: input.allProfiles,
+      profileIds,
+    };
+    await this.prisma.authUserRole.update({
+      where: { id: assignment.id },
+      data: { customPermissions: { ...visibility } },
+    });
+    await this.auditService.record(
+      organisation,
+      'assessment-role.viewer-visibility',
+      { userId, ...visibility },
+      actor.id,
+    );
+    return this.getMember(organisation, userId);
   }
 
   private async replaceRole(
@@ -293,7 +385,11 @@ export class UserManagementService {
     passwordHash: string | null;
     oauthProvider: string | null;
     createdAt: Date;
-    userRoles: { id: string; role: { code: string; name: string } }[];
+    userRoles: {
+      id: string;
+      customPermissions: unknown;
+      role: { code: string; name: string };
+    }[];
   }): OrganisationUserView {
     return {
       id: user.id,
@@ -308,6 +404,9 @@ export class UserManagementService {
         assignmentId: r.id,
         code: r.role.code,
         name: r.role.name,
+        ...(r.role.code === 'assessment_viewer'
+          ? { visibility: readViewerVisibility(r.customPermissions) }
+          : {}),
       })),
     };
   }

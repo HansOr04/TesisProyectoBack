@@ -22,6 +22,8 @@ export interface EvaluationToolDefinition {
   report: {
     subtitle: string;
     scoreLevelPrefix: string; // "Capacidad" → "Capacidad Alta"
+    /** Color dominante del reporte (hex sin #), el de la herramienta en la app. */
+    accentColor: string;
   };
   strategy: ToolScoringStrategy;
 }

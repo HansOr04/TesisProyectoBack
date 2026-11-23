@@ -20,8 +20,29 @@ export const ASSESSMENT_PERMISSION_CODES = [
 export const ASSESSMENT_ROLE_CODES = [
   'assessment_admin',
   'assessment_evaluator',
+  'assessment_viewer',
 ] as const;
 export type AssessmentRoleCode = (typeof ASSESSMENT_ROLE_CODES)[number];
+
+/**
+ * Qué organizaciones evaluadas ve un visualizador. Se guarda en
+ * `AuthUserRole.customPermissions` de su rol `assessment_viewer`.
+ * Sin configurar no ve ninguna: el administrador decide qué habilitarle.
+ */
+export interface ViewerVisibility {
+  allProfiles: boolean;
+  profileIds: string[];
+}
+
+export function readViewerVisibility(raw: unknown): ViewerVisibility {
+  const value = (raw ?? {}) as Partial<ViewerVisibility>;
+  return {
+    allProfiles: value.allProfiles === true,
+    profileIds: Array.isArray(value.profileIds)
+      ? value.profileIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  };
+}
 
 export const ACTIVE_EVALUATION_STATUSES = ['DRAFT', 'IN_PROGRESS'] as const;
 

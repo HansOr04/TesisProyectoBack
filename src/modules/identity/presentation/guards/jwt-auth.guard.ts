@@ -11,6 +11,7 @@ import { Request } from 'express';
 import { AUTH_CONTEXT_KEY, AuthContext } from '../../domain/auth-context';
 import { TOKEN_ISSUER, TokenIssuerPort } from '../../domain/ports';
 import { PrismaService } from '../../../../shared/infrastructure/database/prisma.service';
+import { resolveOrganisationAccess } from '../../application/organisation-access';
 import {
   IS_PUBLIC_KEY,
   REQUIRE_AUTHENTICATED_KEY,
@@ -76,6 +77,7 @@ export class JwtAuthGuard implements CanActivate {
         userId: payload.sub,
         email: payload.email,
         isSuperAdmin: payload.isSuperAdmin === true,
+        isPlatformSuperAdmin: payload.isSuperAdmin === true,
         organisations: payload.orgs ?? [],
       };
     } catch {
@@ -92,13 +94,24 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Account is inactive');
     }
 
-    if (requireSuperAdmin && !auth.isSuperAdmin) {
-      throw new ForbiddenException('Superadmin access required');
+    auth.isPlatformSuperAdmin = auth.isSuperAdmin;
+
+    // Dentro de un proyecto, el superadministrador solo conserva el acceso
+    // total si es quien lo creó; en los demás entra como cualquier miembro.
+    const org = request.params?.org || request.params?.organisation;
+    if (org) {
+      const access = await resolveOrganisationAccess(this.prisma, auth, org);
+      if (!access.allowed) {
+        throw new ForbiddenException('Not a member of this organisation');
+      }
+      auth.isSuperAdmin = access.isSuperAdmin;
+      if (!auth.organisations.includes(org)) {
+        auth.organisations = [...auth.organisations, org];
+      }
     }
 
-    const org = request.params?.org || request.params?.organisation;
-    if (org && !auth.isSuperAdmin && !auth.organisations.includes(org)) {
-      throw new ForbiddenException('Not a member of this organisation');
+    if (requireSuperAdmin && !auth.isSuperAdmin) {
+      throw new ForbiddenException('Superadmin access required');
     }
 
     (request as any)[AUTH_CONTEXT_KEY] = auth;

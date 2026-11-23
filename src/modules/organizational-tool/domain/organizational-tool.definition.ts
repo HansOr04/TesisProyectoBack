@@ -15,6 +15,8 @@ export const ORGANIZATIONAL_TOOL_DEFINITION: EvaluationToolDefinition = {
   report: {
     subtitle: 'Diagnóstico de fortalecimiento organizativo',
     scoreLevelPrefix: 'Capacidad',
+    // Mismo color que la herramienta en la aplicación.
+    accentColor: '196AC8',
   },
   strategy: new OrganizationalStrategy(),
 };
