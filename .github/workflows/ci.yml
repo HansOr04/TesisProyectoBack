@@ -1,8 +1,15 @@
-# Integración continua del servidor (HU-60). Cada verificación es un trabajo
-# propio y todas corren en paralelo: estilo, tipos, pruebas unitarias,
-# migraciones, pruebas de integración y compilación. El último trabajo junta
-# los resultados y es el que exige la protección de ramas (HU-62): si
-# cualquiera falla, se cancela o no corre, el pull request no se puede integrar.
+# Integración continua del servidor (HU-60). Etapas, en paralelo donde se
+# puede:
+#
+#   cambios ─┬─ estilo, tipos, compilación
+#            ├─ unitarias y cobertura ── sonar
+#            ├─ migraciones, integración (PostgreSQL)
+#            └─ mutación (matriz por módulo)
+#   convención y seguridad corren sin esperar a nadie.
+#
+# El último trabajo junta los resultados y es el que exige la protección de
+# ramas (HU-62): si cualquier etapa falla o se cancela, no se puede integrar.
+# Un pull request que solo cambia documentación se salta las pruebas.
 name: CI
 
 on:
@@ -26,8 +33,114 @@ env:
   CORS_ORIGIN: http://localhost:5173
 
 jobs:
-  lint:
-    name: Estilo (ESLint)
+  cambios:
+    name: cambios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      codigo: ${{ github.event_name != 'pull_request' || steps.filtro.outputs.codigo == 'true' }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: filtro
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            codigo:
+              - 'src/**'
+              - 'test/**'
+              - 'prisma/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig*.json'
+              - 'nest-cli.json'
+              - 'stryker.config.json'
+              - 'sonar-project.properties'
+              - '.github/**'
+
+  convencion:
+    name: convención
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # Títulos y commits con Conventional Commits: tipo(alcance opcional): texto.
+      - name: Título y commits del pull request
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          regex='^(feat|fix|perf|refactor|docs|test|ci|build|chore|style|revert|release)(\([^)]+\))?!?: .+'
+          fail=0
+          if [[ ! "$TITLE" =~ $regex ]]; then
+            echo "::error::El título no sigue la convención (tipo: descripción): $TITLE"
+            fail=1
+          fi
+          while IFS= read -r line; do
+            sha=${line%% *}; subject=${line#* }
+            if [[ ! "$subject" =~ $regex ]]; then
+              echo "::error::Commit ${sha:0:7} no sigue la convención: $subject"
+              fail=1
+            fi
+          done < <(git log --no-merges --format='%H %s' "$BASE..$HEAD")
+          exit $fail
+
+  seguridad:
+    name: seguridad
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Compara `npm audit` (dependencias de producción) de la rama base con
+      # el del cambio: falla si se agregan vulnerabilidades altas o críticas.
+      # Las que ya existían se informan en el resumen sin bloquear.
+      - name: Vulnerabilidades nuevas en dependencias
+        run: |
+          ids() {
+            jq -r '[.vulnerabilities[]?.via[]? | objects
+                    | select(.severity == "high" or .severity == "critical")
+                    | "\(.severity)\t\(.name)\t\(.title)\t\(.url)"] | unique[]' "$1" | sort
+          }
+          npm audit --omit=dev --json > /tmp/head.json || true
+          ids /tmp/head.json > /tmp/head.txt
+          if [ -d base ]; then
+            (cd base && npm audit --omit=dev --json > /tmp/base.json) || true
+            ids /tmp/base.json > /tmp/base.txt
+          else
+            cp /tmp/head.txt /tmp/base.txt
+          fi
+          comm -13 /tmp/base.txt /tmp/head.txt > /tmp/new.txt
+          {
+            echo "### Vulnerabilidades altas y críticas (dependencias de producción)"
+            echo "- Ya existentes: $(wc -l < /tmp/base.txt)"
+            echo "- Nuevas en este cambio: $(wc -l < /tmp/new.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s /tmp/new.txt ]; then
+            {
+              echo "| Severidad | Paquete | Problema | Aviso |"
+              echo "|---|---|---|---|"
+              awk -F'\t' '{print "| "$1" | "$2" | "$3" | "$4" |"}' /tmp/new.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El cambio agrega $(wc -l < /tmp/new.txt) vulnerabilidades altas o críticas"
+            exit 1
+          fi
+
+  estilo:
+    name: estilo
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,8 +148,10 @@ jobs:
       - uses: ./.github/actions/preparar
       - run: npm run lint
 
-  types:
-    name: Tipos (TypeScript)
+  tipos:
+    name: tipos
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -44,8 +159,10 @@ jobs:
       - uses: ./.github/actions/preparar
       - run: npx tsc --noEmit -p tsconfig.json
 
-  unit:
-    name: Pruebas unitarias
+  cobertura:
+    name: unitarias y cobertura
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -54,11 +171,33 @@ jobs:
       # Secreto de un solo uso para firmar los JWT de las pruebas; no es el
       # de producción, que vive solo en Heroku.
       - run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-      # El reporter de GitHub marca cada prueba que falla en el pull request.
-      - run: npm test -- --ci --silent --reporters=default --reporters=github-actions
+      # Falla si la cobertura baja de los mínimos de package.json (jest).
+      - run: >-
+          npm test -- --ci --silent --coverage
+          --coverageReporters=lcov --coverageReporters=json-summary
+          --coverageReporters=text-summary
+          --reporters=default --reporters=github-actions
+      - name: Cobertura en el resumen
+        if: always()
+        run: |
+          [ -f coverage/coverage-summary.json ] || exit 0
+          {
+            echo "### Cobertura de las pruebas unitarias"
+            echo "| Métrica | % |"
+            echo "|---|---|"
+            jq -r '.total | to_entries[] | "| \(.key) | \(.value.pct) |"' coverage/coverage-summary.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura
+          path: coverage/lcov.info
+          retention-days: 7
 
-  migrations:
-    name: Migraciones y modelo
+  migraciones:
+    name: migraciones
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -82,13 +221,14 @@ jobs:
           npx prisma migrate deploy
           npx prisma db seed
       # HU-65: el modelo (schema.prisma) tiene que coincidir con lo que dejan
-      # las migraciones. Si alguien cambia el modelo sin crear su migración,
-      # el pull request no se puede integrar y el cambio nunca llega a Heroku.
+      # las migraciones; si no, el cambio nunca llegaría bien a Heroku.
       - name: El modelo coincide con las migraciones
         run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
 
-  e2e:
-    name: Pruebas de integración (PostgreSQL)
+  integracion:
+    name: integración
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -112,12 +252,45 @@ jobs:
         run: |
           npx prisma migrate deploy
           npx prisma db seed
-      # --silent oculta los registros de la aplicación (avisos con trazas que
-      # parecían errores); los fallos de las pruebas se siguen mostrando.
+      # --silent oculta los registros de la aplicación; los fallos de las
+      # pruebas se siguen mostrando y se marcan en el pull request.
       - run: npm run test:e2e -- --ci --silent --reporters=default --reporters=github-actions
 
-  build:
-    name: Compilación
+  mutacion:
+    name: mutación
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Módulos críticos con su mínimo de mutantes detectados (puntaje
+        # medido al crearlos, con un margen). Subirlos cuando mejoren.
+        include:
+          - modulo: puntaje
+            archivos: src/modules/assessment-core/domain/scoring.engine.ts,src/modules/assessment-analytics/domain/statistics.ts
+            minimo: 70
+          - modulo: acceso
+            archivos: src/modules/assessment-core/application/assessment-access-scope.service.ts
+            minimo: 90
+          - modulo: ia
+            archivos: src/modules/evaluation-tool/domain/evaluation-tool-ai.types.ts
+            minimo: 65
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/preparar
+      - run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Mutantes de ${{ matrix.modulo }} (mínimo ${{ matrix.minimo }} %)
+        run: |
+          jq --argjson m ${{ matrix.minimo }} '.thresholds.break = $m | .reporters = ["clear-text"]' \
+            stryker.config.json > stryker.ci.json
+          npx stryker run stryker.ci.json --mutate "${{ matrix.archivos }}"
+
+  compilacion:
+    name: compilación
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -125,26 +298,56 @@ jobs:
       - uses: ./.github/actions/preparar
       - run: npm run build
 
+  # Se activa al definir la variable SONAR_ORGANIZATION y el secreto
+  # SONAR_TOKEN del repositorio (cuenta de SonarCloud); mientras tanto queda
+  # como «omitido».
+  sonar:
+    name: sonar
+    needs: cobertura
+    if: vars.SONAR_ORGANIZATION != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: cobertura
+          path: coverage
+      - uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_ORGANIZATION }}_TesisProyectoBack
+
   # Conserva el nombre del trabajo anterior porque es el que exige la
   # protección de ramas de develop y main.
   ci:
     name: Estilo, tipos y pruebas
     if: always()
-    needs: [lint, types, unit, migrations, e2e, build]
+    needs:
+      [cambios, convencion, seguridad, estilo, tipos, cobertura, migraciones, integracion, mutacion, compilacion, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Resultado de cada verificación
+      - name: Resultado de cada etapa
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          echo "### Resultado de la integración continua" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Verificación | Resultado |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"' >> "$GITHUB_STEP_SUMMARY"
-          failed=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result != "success") | .key] | join(", ")')
+          {
+            echo "### Resultado de la integración continua"
+            echo "| Etapa | Resultado |"
+            echo "|---|---|"
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Omitida está bien (sin cambios de código o Sonar sin configurar);
+          # fallida o cancelada, no.
+          failed=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")')
           if [ -n "$failed" ]; then
             echo "::error::No pasaron: $failed"
             exit 1
           fi
-          echo "Todas las verificaciones pasaron."
+          echo "Todas las etapas pasaron."
