@@ -1,0 +1,95 @@
+# Despliegue continuo del servidor. Cuando el CI termina en verde sobre main,
+# Heroku despliega ese commit (integración de GitHub: compila, corre las
+# migraciones en la fase release y publica). Este workflow espera a que el
+# despliegue de ESE commit termine y verifica la API en producción:
+#
+#   esperar despliegue ── salud ── seguridad de acceso ── CORS
+#
+# Si Heroku falla o la API no responde como debe, el workflow queda en rojo.
+name: Despliegue
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: despliegue-produccion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: read
+
+env:
+  API_URL: https://evaluartesis-5deec07f5fd8.herokuapp.com
+  WEB_ORIGIN: https://evaluar-ochre.vercel.app
+  HEROKU_ENVIRONMENT: evaluartesis
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  esperar:
+    name: esperar despliegue en Heroku
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # Heroku registra cada despliegue en GitHub (entorno «evaluartesis»).
+      - name: Despliegue del commit ${{ env.SHA }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 80); do
+            id=$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$SHA&environment=$HEROKU_ENVIRONMENT&per_page=1" --jq '.[0].id // empty')
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // "pending"')
+              echo "Intento $i: despliegue $id → $state"
+              case "$state" in
+                success) echo "Heroku desplegó ${SHA:0:7}." ; exit 0 ;;
+                failure|error) echo "::error::Heroku no pudo desplegar ${SHA:0:7} ($state). Revisar «heroku releases» y la fase release (migraciones)."; exit 1 ;;
+              esac
+            else
+              echo "Intento $i: Heroku aún no registra el despliegue"
+            fi
+            sleep 15
+          done
+          echo "::error::Heroku no terminó de desplegar ${SHA:0:7} en 20 minutos"
+          exit 1
+
+  verificar:
+    name: verificar API en producción
+    needs: esperar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Salud
+        run: |
+          for _ in $(seq 1 10); do
+            body=$(curl -fsS --max-time 15 "$API_URL/health") && echo "$body" | jq -e '.status == "ok"' && exit 0
+            sleep 10
+          done
+          echo "::error::/health no responde «ok»"; exit 1
+      - name: Acceso protegido
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$API_URL/organisations")
+          [ "$code" = 401 ] || { echo "::error::/organisations sin sesión respondió $code (se esperaba 401)"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST "$API_URL/auth/login" \
+            -H 'content-type: application/json' \
+            -d '{"email":"verificacion-ci@example.invalid","password":"no-es-una-clave"}')
+          [ "$code" = 401 ] || { echo "::error::Un inicio de sesión inválido respondió $code (se esperaba 401; 5xx indica base de datos o servidor caído)"; exit 1; }
+      - name: CORS para la aplicación web
+        run: |
+          allowed=$(curl -s -D - -o /dev/null --max-time 15 -X OPTIONS "$API_URL/auth/login" \
+            -H "Origin: $WEB_ORIGIN" -H 'Access-Control-Request-Method: POST' \
+            | tr -d '\r' | awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2}')
+          [ "$allowed" = "$WEB_ORIGIN" ] || { echo "::error::La API no acepta peticiones de $WEB_ORIGIN (respondió «$allowed»)"; exit 1; }
+      - name: Resumen
+        run: |
+          {
+            echo "### Producción verificada"
+            echo "- Commit: \`${SHA:0:7}\`"
+            echo "- API: $API_URL"
+            echo "- Salud, acceso protegido y CORS: correctos"
+          } >> "$GITHUB_STEP_SUMMARY"
