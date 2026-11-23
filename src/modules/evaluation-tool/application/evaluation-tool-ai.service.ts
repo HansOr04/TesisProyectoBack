@@ -1,6 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { StructuredLoggerService } from '../../../shared/infrastructure/logging/structured-logger.service';
-import { AssessmentLlmClientService } from '../../assessment-ai/application/assessment-llm-client.service';
+import {
+  AiCompletionResult,
+  AssessmentLlmClientService,
+} from '../../assessment-ai/application/assessment-llm-client.service';
 import {
   AiCriticalItem,
   AiEvaluatedItem,
@@ -49,6 +52,27 @@ const NARRATIVE_TONE_INSTRUCTIONS: Record<NarrativeTone, string> = {
   formal:
     'Usa un tono formal orientado a compradores y operadores que requieren documentación de debida diligencia.',
 };
+
+/** true si la respuesta se puede leer (para no guardar en caché una rota). */
+function readable(parse: () => unknown): boolean {
+  try {
+    parse();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Consumo de una llamada, para el registro. */
+function usageOf(result: AiCompletionResult) {
+  return {
+    cached: !!result.cached,
+    tokensUsed: result.tokensUsed,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    finishReason: result.finishReason,
+  };
+}
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -101,13 +125,14 @@ Responde solo con el texto de la narrativa, sin explicaciones ni markdown, en 3-
     return `Eres un consultor senior que analiza evaluaciones de ${this.context.domain} de asociaciones de productores para un reporte ejecutivo en diapositivas.
 ${ANTI_HALLUCINATION_RULE}
 Con los puntajes por ${s}, los KPI mejor y peor calificados de cada ${s} y los KPI críticos recibidos, produce:
-- "keyFindings": 3 a 5 hallazgos clave, cada uno una oración concisa que sintetice un patrón real de los datos (no repitas un KPI por hallazgo, busca relaciones entre ${this.context.sectionLabelPlural}).
-- "sectionAnalysis": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos (como string) y cuyo valor sea 1-2 oraciones analizando esa ${s} específica.
+- "keyFindings": 3 hallazgos clave, cada uno una oración concisa que sintetice un patrón real de los datos (no repitas un KPI por hallazgo, busca relaciones entre ${this.context.sectionLabelPlural}).
+- "sectionAnalysis": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos (como string) y cuyo valor sea UNA oración de máximo 25 palabras analizando esa ${s} específica.
 - "strengths": máximo 4 fortalezas principales de la organización en general; cada una {"title": 2 a 4 palabras, "detail": una oración de máximo 20 palabras}.
 - "gaps": máximo 4 brechas críticas de la organización en general, con el mismo formato.
-- "conclusion": 1 a 2 oraciones con la lectura de cierre: cómo va la asociación y qué debe priorizar.
-- "sectionInsights": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos y cuyo valor sea {"strengths": [...], "gaps": [...]}, con máximo 3 puntos cada uno en el formato {"title": 2 a 4 palabras, "detail": máximo 18 palabras}, basados en los KPI de esa ${s}. Si una ${s} no tiene fortalezas o brechas claras, deja la lista vacía.
-- "recommendations": 3 a 5 recomendaciones estratégicas priorizadas (la más urgente primero), cada una una oración accionable.
+- "conclusion": 1 o 2 oraciones (máximo 45 palabras) con la lectura de cierre: cómo va la asociación y qué debe priorizar.
+- "sectionInsights": un objeto cuyas claves sean EXACTAMENTE los números de ${s} recibidos y cuyo valor sea {"strengths": [...], "gaps": [...]}, con máximo 2 puntos cada uno en el formato {"title": 2 a 4 palabras, "detail": máximo 15 palabras}, basados en los KPI de esa ${s}. Si una ${s} no tiene fortalezas o brechas claras, deja la lista vacía.
+- "recommendations": 3 recomendaciones estratégicas priorizadas (la más urgente primero), cada una una oración accionable de máximo 25 palabras.
+Sé conciso: no repitas la misma idea en varios campos.
 Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o después, con este formato exacto:
 {"keyFindings": ["..."], "sectionAnalysis": {"1": "..."}, "strengths": [{"title": "...", "detail": "..."}], "gaps": [{"title": "...", "detail": "..."}], "conclusion": "...", "sectionInsights": {"1": {"strengths": [{"title": "...", "detail": "..."}], "gaps": [{"title": "...", "detail": "..."}]}}, "recommendations": ["..."]}`;
   }
@@ -238,6 +263,9 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       userPrompt,
       1200,
       0.4,
+      undefined,
+      // Texto corto a partir de puntajes: no necesita el modelo que razona.
+      { fast: true },
     );
     this.log('executive narrative generated', {
       tone,
@@ -250,51 +278,87 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
   async generateReportInsights(
     context: AiReportContext,
   ): Promise<AiReportInsights> {
+    const sectionNumbers = context.sectionScores.map((s) => String(s.number));
     const userPrompt = [
-      ...this.describeReportContext(context, 'pct'),
+      // Los KPI críticos van como conteo: los más bajos de cada sección ya
+      // aparecen en el detalle, con nombre y observación.
+      ...this.describeReportContext(context, 'pct', false),
       ...this.describeSectionDetails(context),
     ].join('\n');
+    // Límite holgado (solo se cobra lo que se genera): si se queda corto, el
+    // JSON sale cortado y el reporte pierde el análisis.
     const maxOutputTokens = Math.min(
-      2500 + 300 * context.sectionScores.length,
-      6000,
+      1800 + 300 * context.sectionScores.length,
+      4500,
     );
-    const result = await this.llmClient.complete(
+    return this.completeReportJson(
+      'report insights',
       this.reportInsightsPrompt,
       userPrompt,
       maxOutputTokens,
       0.4,
-      // El export PPTX también lee la BD y arma el archivo dentro de los 30 s
-      // de Heroku; si la IA tarda más, el reporte sale sin insights.
-      15_000,
-      { fast: true },
-    );
-    this.log('report insights generated', { tokensUsed: result.tokensUsed });
-    return this.parseOrWarn('report insights', result.text, (text) =>
-      parseAiReportInsights(
-        text,
-        context.sectionScores.map((s) => String(s.number)),
-      ),
+      (text) => parseAiReportInsights(text, sectionNumbers),
     );
   }
 
   // FODA para el reporte de una evaluación completada. Corre en paralelo con
   // los insights y con el mismo límite de tiempo.
   async generateSwot(context: AiReportContext): Promise<AiSwot> {
+    // El FODA necesita menos detalle que el análisis: puntajes por sección y
+    // los nombres de los KPI extremos, sin observaciones.
     const userPrompt = [
       ...this.describeProfile(context),
-      ...this.describeReportContext(context, 'pct'),
-      ...this.describeSectionDetails(context),
+      ...this.describeReportContext(context, 'pct', false),
+      ...this.describeSectionDetails(context, { observations: false, max: 2 }),
     ].join('\n');
-    const result = await this.llmClient.complete(
+    return this.completeReportJson(
+      'swot',
       this.swotPrompt,
       userPrompt,
       1500,
       0.5,
-      15_000,
-      { fast: true },
+      parseAiSwot,
     );
-    this.log('swot generated', { tokensUsed: result.tokensUsed });
-    return this.parseOrWarn('swot', result.text, parseAiSwot);
+  }
+
+  /**
+   * Llamada de reporte: modelo rápido, modo JSON y caché. Si la respuesta
+   * llega cortada (el modelo a veces termina antes de cerrar el JSON), se
+   * reintenta una vez; nunca se guarda en caché una respuesta ilegible.
+   * Ambos intentos caben en los 15 s del export.
+   */
+  private async completeReportJson<T>(
+    capability: string,
+    systemPrompt: string,
+    userPrompt: string,
+    maxOutputTokens: number,
+    temperature: number,
+    parse: (text: string) => T,
+  ): Promise<T> {
+    const started = Date.now();
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const result = await this.llmClient.complete(
+        systemPrompt,
+        userPrompt,
+        maxOutputTokens,
+        temperature,
+        Math.max(3_000, 15_000 - (Date.now() - started)),
+        {
+          fast: true,
+          cache: true,
+          json: true,
+          isUsable: (text) => readable(() => parse(text)),
+        },
+      );
+      this.log(`${capability} generated`, { ...usageOf(result), attempt });
+      try {
+        return this.parseOrWarn(capability, result.text, parse);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
   }
 
   protected describeProfile(context: AiReportContext): string[] {
@@ -309,14 +373,19 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     ].filter(Boolean);
   }
 
-  protected describeSectionDetails(context: AiReportContext): string[] {
+  protected describeSectionDetails(
+    context: AiReportContext,
+    opts: { observations?: boolean; max?: number } = {},
+  ): string[] {
     if (!context.sectionDetails?.length) return [];
+    const withObservations = opts.observations ?? true;
+    const max = opts.max ?? 3;
     const kpi = (k: AiKpiContext) =>
-      `${k.code} ${k.name} (${Math.round(k.score * 10)} %)${k.observation ? `: ${k.observation}` : ''}`;
+      `${k.code} ${k.name} (${Math.round(k.score * 10)} %)${withObservations && k.observation ? `: ${k.observation}` : ''}`;
     return context.sectionDetails.flatMap((d) => [
       `${capitalize(this.context.sectionLabel)} ${d.number}:`,
-      ...d.best.map((k) => `  + ${kpi(k)}`),
-      ...d.worst.map((k) => `  - ${kpi(k)}`),
+      ...d.best.slice(0, max).map((k) => `  + ${kpi(k)}`),
+      ...d.worst.slice(0, max).map((k) => `  - ${kpi(k)}`),
     ]);
   }
 
@@ -327,6 +396,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
   protected describeReportContext(
     context: AiReportContext,
     scale: 'score' | 'pct' = 'score',
+    withCriticalList = true,
   ): string[] {
     const fmt = (score: number) =>
       scale === 'pct' ? `${Math.round(score * 10)} %` : `${score}/10`;
@@ -336,11 +406,13 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       ...context.sectionScores.map(
         (s) => `- ${s.number}. ${s.name}: ${fmt(s.weightedAvg)}`,
       ),
-      context.criticalItems.length > 0
-        ? `KPI críticos: ${context.criticalItems
-            .map((c) => `${c.code} (${c.name}, ${fmt(c.score)})`)
-            .join('; ')}`
-        : 'No hay KPI críticos.',
+      !withCriticalList
+        ? `KPI críticos: ${context.criticalItems.length}`
+        : context.criticalItems.length > 0
+          ? `KPI críticos: ${context.criticalItems
+              .map((c) => `${c.code} (${c.name}, ${fmt(c.score)})`)
+              .join('; ')}`
+          : 'No hay KPI críticos.',
     ];
   }
 

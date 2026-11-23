@@ -1229,8 +1229,8 @@ export abstract class EvaluationToolService {
       name: r.indicator.name,
       score: r.score,
       observation:
-        r.observation?.trim().length > 140
-          ? `${r.observation.trim().slice(0, 139)}…`
+        r.observation?.trim().length > 100
+          ? `${r.observation.trim().slice(0, 99)}…`
           : r.observation?.trim() || undefined,
     });
     context.sectionDetails = evaluation.template.sections

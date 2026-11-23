@@ -578,3 +578,18 @@ model AssessmentIndicatorMeasure {
   @@index([evaluationId])
   @@index([indicatorId])
 }
+
+// Respuestas de la IA reutilizables (análisis del reporte y FODA): la clave es
+// un hash del prompt completo, así que cualquier cambio en las calificaciones
+// u observaciones produce otra clave y se vuelve a generar. Evita pagar de
+// nuevo por exportar el mismo reporte varias veces.
+model AssessmentAiCache {
+  key        String   @id // sha256 de proveedor + modelo + prompts + límite
+  provider   String
+  model      String?
+  text       String
+  tokensUsed Int?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
