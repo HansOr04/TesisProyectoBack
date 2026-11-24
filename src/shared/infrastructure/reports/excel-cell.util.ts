@@ -1,5 +1,4 @@
 import { withExportSlot } from './export-limiter';
-import * as XLSX from 'xlsx';
 import * as ExcelJS from 'exceljs';
 
 /** Excel hard limit per cell (inclusive). */
@@ -50,42 +49,10 @@ export function sanitizeForExcelCell(
 /** @deprecated Use sanitizeForExcelCell */
 export const clampForExcelCell = sanitizeForExcelCell;
 
-export function clampAoAForExcel(rows: unknown[][]): unknown[][] {
-  return rows.map((row) => row.map((cell) => sanitizeForExcelCell(cell)));
-}
-
-export function clampJsonRowsForExcel<T extends Record<string, unknown>>(
-  rows: T[],
-): T[] {
-  return rows.map((row) => {
-    const out = { ...row } as Record<string, unknown>;
-    for (const key of Object.keys(out)) {
-      out[key] = sanitizeForExcelCell(out[key], key);
-    }
-    return out as T;
-  });
-}
-
-export function createExcelWorksheetFromAoA(data: unknown[][]) {
-  return XLSX.utils.aoa_to_sheet(clampAoAForExcel(data));
-}
-
-export function createExcelWorksheetFromJson(data: Record<string, unknown>[]) {
-  return XLSX.utils.json_to_sheet(clampJsonRowsForExcel(data));
-}
-
-/** Serializa un libro a buffer respetando el límite de exportes concurrentes. */
-export function writeExcelBuffer(workbook: XLSX.WorkBook): Promise<Buffer> {
-  return withExportSlot(
-    async () =>
-      XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as Buffer,
-  );
-}
-
 // ── Hojas con formato (ExcelJS) ──────────────────────────────────────────
-// SheetJS Community no escribe estilos; para los reportes que se entregan a
-// las organizaciones se usa ExcelJS: título, encabezado con color, anchos de
-// columna, texto ajustado, filtros y la fila de encabezado inmovilizada.
+// Los reportes que se entregan a las organizaciones se generan con ExcelJS:
+// título, encabezado con color, anchos de columna, texto ajustado, filtros y
+// la fila de encabezado inmovilizada.
 
 export type ExcelColumnKind = 'text' | 'number' | 'score' | 'percent' | 'date';
 
