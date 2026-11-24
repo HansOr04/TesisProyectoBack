@@ -23,6 +23,8 @@ describe('Organisation management (e2e)', () => {
   let evaluatorToken: string;
   const api = () => request(app.getHttpServer());
   const orgId = `e2e-org-${Date.now().toString(36)}`;
+  const orgWithAdmin = `${orgId}-adm`;
+  const orgs = [orgId, orgWithAdmin];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -42,34 +44,38 @@ describe('Organisation management (e2e)', () => {
   afterAll(async () => {
     // Orden inverso a las dependencias; la organización de prueba se queda sin rastro.
     const evaluations = await prisma.assessmentEvaluation.findMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
       select: { id: true },
     });
     const evaluationIds = evaluations.map((e) => e.id);
     await prisma.assessmentIndicatorMeasure.deleteMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
     });
     await prisma.assessmentResponse.deleteMany({
       where: { evaluationId: { in: evaluationIds } },
     });
     await prisma.assessmentEvaluation.deleteMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
     });
     await prisma.assessmentOrganisationProfile.deleteMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
     });
     await prisma.assessmentTemplate.deleteMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
     });
     await prisma.assessmentRiskCountryParam.deleteMany({
-      where: { organisation: orgId },
+      where: { organisation: { in: orgs } },
     });
-    await prisma.authUserRole.deleteMany({ where: { organisation: orgId } });
-    await prisma.activityLog.deleteMany({ where: { organisation: orgId } });
+    await prisma.authUserRole.deleteMany({
+      where: { organisation: { in: orgs } },
+    });
+    await prisma.activityLog.deleteMany({
+      where: { organisation: { in: orgs } },
+    });
     await prisma.organisationMember.deleteMany({
-      where: { organisationId: orgId },
+      where: { organisationId: { in: orgs } },
     });
-    await prisma.organisation.deleteMany({ where: { id: orgId } });
+    await prisma.organisation.deleteMany({ where: { id: { in: orgs } } });
     await app.close();
   });
 
@@ -151,6 +157,40 @@ describe('Organisation management (e2e)', () => {
         .send({ id, name: 'Nombre válido' })
         .expect(status);
     }
+  });
+
+  it('assigns an existing user as administrator without touching their password', async () => {
+    // Con contraseña, se rechaza: no puede cambiarse la de otra persona.
+    await api()
+      .post('/organisations')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        id: orgWithAdmin,
+        name: 'Proyecto con admin existente',
+        adminEmail: EVALUATOR.email,
+        adminPassword: 'otra-clave-123',
+      })
+      .expect(409);
+    // Rechazado antes de crear nada: no queda un proyecto a medio configurar.
+    expect(
+      await prisma.organisation.findUnique({ where: { id: orgWithAdmin } }),
+    ).toBeNull();
+    await api().post('/auth/login').send(EVALUATOR).expect(200);
+
+    const res = await api()
+      .post('/organisations')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        id: orgWithAdmin,
+        name: 'Proyecto con admin existente',
+        adminEmail: EVALUATOR.email,
+      })
+      .expect(201);
+    expect(res.body.admin).toMatchObject({
+      email: EVALUATOR.email,
+      created: false,
+    });
+    await api().post('/auth/login').send(EVALUATOR).expect(200);
   });
 
   it('renames an organisation and records the change in the audit log', async () => {
