@@ -125,6 +125,10 @@ export class OrganisationManagementService {
       throw new ConflictException(`Ya existe una organización con id "${id}"`);
     }
 
+    // El administrador se valida antes de crear nada: si sus datos no
+    // sirven, no debe quedar un proyecto a medio configurar.
+    await this.assertAdminInput(input, actor);
+
     const organisation = await this.prisma.organisation.create({
       data: { id, name: input.name.trim(), createdById: actor.id },
     });
@@ -232,35 +236,50 @@ export class OrganisationManagementService {
     });
   }
 
+  /**
+   * Un administrador nuevo necesita contraseña; una cuenta existente conserva
+   * la suya, así que crear un proyecto no sirve para cambiársela a otra persona.
+   */
+  private async assertAdminInput(
+    input: CreateOrganisationInput,
+    actor: { id: string; email: string },
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: adminEmailOf(input, actor) },
+      select: { id: true },
+    });
+    if (!user && (!input.adminPassword || input.adminPassword.length < 8)) {
+      throw new BadRequestException(
+        'Para un administrador nuevo hace falta una contraseña de al menos 8 caracteres.',
+      );
+    }
+    if (user && input.adminPassword) {
+      throw new ConflictException(
+        'Ese correo ya tiene una cuenta; elígelo como usuario existente, sin contraseña, y conservará la suya.',
+      );
+    }
+  }
+
   /** Crea o reutiliza al administrador inicial y le da el rol en la organización. */
   private async attachAdmin(
     organisation: string,
     input: CreateOrganisationInput,
     actor: { id: string; email: string },
   ): Promise<{ id: string; email: string; created: boolean }> {
-    const email = (input.adminEmail ?? actor.email).trim().toLowerCase();
+    const email = adminEmailOf(input, actor);
     let user = await this.prisma.user.findUnique({ where: { email } });
     let created = false;
 
     if (!user) {
-      if (!input.adminPassword || input.adminPassword.length < 8) {
-        throw new BadRequestException(
-          'Para un administrador nuevo hace falta una contraseña de al menos 8 caracteres.',
-        );
-      }
       user = await this.prisma.user.create({
         data: {
           email,
           name: input.adminName?.trim() || email,
-          passwordHash: await this.hasher.hash(input.adminPassword),
+          // Validada en assertAdminInput antes de crear el proyecto.
+          passwordHash: await this.hasher.hash(input.adminPassword ?? ''),
         },
       });
       created = true;
-    } else if (input.adminPassword) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: await this.hasher.hash(input.adminPassword) },
-      });
     }
 
     await this.prisma.organisationMember.upsert({
@@ -282,4 +301,11 @@ export class OrganisationManagementService {
 
     return { id: user.id, email: user.email, created };
   }
+}
+
+function adminEmailOf(
+  input: CreateOrganisationInput,
+  actor: { email: string },
+): string {
+  return (input.adminEmail ?? actor.email).trim().toLowerCase();
 }
