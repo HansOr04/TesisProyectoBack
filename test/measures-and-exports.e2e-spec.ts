@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import request from 'supertest';
-import * as XLSX from 'xlsx';
 import { PrismaService } from '../src/shared/infrastructure/database/prisma.service';
 import {
   ORG,
@@ -21,6 +21,27 @@ const PPTX =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const XLSX_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+async function readWorkbook(body: Buffer): Promise<ExcelJS.Workbook> {
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(body as unknown as ArrayBuffer);
+  return book;
+}
+
+/** Texto de todas las celdas de todas las hojas, una fila por línea. */
+function workbookText(book: ExcelJS.Workbook): string {
+  const lines: string[] = [];
+  book.eachSheet((sheet) =>
+    sheet.eachRow((row) =>
+      lines.push(
+        (row.values as unknown[])
+          .map((v) => (v === null || v === undefined ? '' : String(v)))
+          .join(','),
+      ),
+    ),
+  );
+  return lines.join('\n');
+}
 
 const binary: Parameters<request.Test['parse']>[0] = (res, done) => {
   const chunks: Buffer[] = [];
@@ -266,11 +287,9 @@ describe('Measures and report exports (e2e)', () => {
         .parse(binary)
         .expect(200);
       expect(res.headers['content-type']).toContain(XLSX_TYPE);
-      const book = XLSX.read(res.body, { type: 'buffer' });
-      expect(book.SheetNames.length).toBeGreaterThan(0);
-      const text = book.SheetNames.map((n) =>
-        XLSX.utils.sheet_to_csv(book.Sheets[n]),
-      ).join('\n');
+      const book = await readWorkbook(res.body);
+      expect(book.worksheets.length).toBeGreaterThan(0);
+      const text = workbookText(book);
       expect(text).toContain(orgEvalA.indicators[0].code);
     });
 
@@ -307,9 +326,9 @@ describe('Measures and report exports (e2e)', () => {
         .parse(binary)
         .expect(200);
       expect(xlsx.headers['content-type']).toContain(XLSX_TYPE);
-      expect(
-        XLSX.read(xlsx.body, { type: 'buffer' }).SheetNames.length,
-      ).toBeGreaterThan(0);
+      expect((await readWorkbook(xlsx.body)).worksheets.length).toBeGreaterThan(
+        0,
+      );
 
       const pptx = await auth(
         http()
