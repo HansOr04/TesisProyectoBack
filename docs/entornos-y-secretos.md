@@ -36,7 +36,7 @@ de ejemplo.
 | `CORS_ORIGIN` | No | URL de la web en Vercel. |
 | `NODE_ENV` | No | `production`. |
 | `PORT` | No | La define Heroku. |
-| `JWT_EXPIRES_IN`, `REFRESH_TOKEN_TTL_DAYS`, `ACTIVITY_LOG_RETENTION_MONTHS`, `AI_PROVIDER`, `GEMINI_MODEL`, `NVIDIA_MODEL`, `EXPORT_MAX_CONCURRENCY`, `EXPORT_MAX_QUEUED`, `SEED_ORGANISATION_ID`, `SEED_ORGANISATION_NAME`, `SEED_ADMIN_EMAIL` | No | Configuración; los valores por defecto están en `.env.example`. |
+| `JWT_EXPIRES_IN`, `REFRESH_TOKEN_TTL_DAYS`, `ACTIVITY_LOG_RETENTION_MONTHS`, `AI_PROVIDER`, `GEMINI_MODEL`, `SWAGGER_ENABLED`, `NVIDIA_MODEL`, `EXPORT_MAX_CONCURRENCY`, `EXPORT_MAX_QUEUED`, `SEED_ORGANISATION_ID`, `SEED_ORGANISATION_NAME`, `SEED_ADMIN_EMAIL` | No | Configuración; los valores por defecto están en `.env.example`. |
 
 ### Aplicación web — Vercel › Settings › Environment Variables
 

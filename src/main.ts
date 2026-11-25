@@ -43,6 +43,22 @@ async function bootstrap(): Promise<void> {
   app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
+  // En producción la documentación de la API queda cerrada, salvo que se pida.
+  const swaggerEnabled =
+    config.get('NODE_ENV') !== 'production' ||
+    config.get('SWAGGER_ENABLED') === 'true';
+  if (swaggerEnabled) setupSwagger(app);
+
+  const port = config.get<number>('PORT') ?? 3100;
+  await app.listen(port);
+  const logger = await app.resolve(StructuredLoggerService);
+  logger.setContext({ service: 'Bootstrap' });
+  logger.info(
+    `API listening on http://localhost:${port}${swaggerEnabled ? ' (docs: /api/docs)' : ''}`,
+  );
+}
+
+function setupSwagger(app: NestExpressApplication): void {
   const swagger = new DocumentBuilder()
     .setTitle('Assessment API')
     .setDescription(
@@ -56,12 +72,6 @@ async function bootstrap(): Promise<void> {
     app,
     SwaggerModule.createDocument(app, swagger),
   );
-
-  const port = config.get<number>('PORT') ?? 3100;
-  await app.listen(port);
-  const logger = await app.resolve(StructuredLoggerService);
-  logger.setContext({ service: 'Bootstrap' });
-  logger.info(`API listening on http://localhost:${port} (docs: /api/docs)`);
 }
 
 void bootstrap();
