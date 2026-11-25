@@ -15,6 +15,7 @@ import { RiskToolModule } from './modules/risk-tool/risk-tool.module';
 import { validateEnv } from './shared/infrastructure/config/env.validation';
 import { PrismaModule } from './shared/infrastructure/database/prisma.module';
 import { RequestIdMiddleware } from './shared/infrastructure/http/request-id.middleware';
+import { RequestLogMiddleware } from './shared/infrastructure/http/request-log.middleware';
 import { LoggerModule } from './shared/infrastructure/logging/logger.module';
 import { HealthController } from './shared/infrastructure/http/health.controller';
 
@@ -45,6 +46,6 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, RequestLogMiddleware).forRoutes('*');
   }
 }

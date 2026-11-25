@@ -46,8 +46,8 @@ lectura, sobre la demo publicada. No incluye una prueba de intrusión externa.
 - **Media.** Un superadministrador puede cambiar la cuenta de cualquier miembro
   de un proyecto suyo, incluida la de otro superadministrador agregado a él. Son
   el equipo que opera la plataforma.
-- **Media y baja.** Quedan vulnerabilidades moderadas y bajas en dependencias,
-  sin versión corregida compatible. El detalle sale con `npm audit`.
+- **Media y baja.** Quedan vulnerabilidades moderadas y bajas en dependencias
+  (22 en el servidor y 10 en la web). El detalle sale con `npm audit`.
 
 ## Alertas de CodeQL
 

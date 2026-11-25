@@ -242,6 +242,17 @@ describe('Route security (e2e, HU-70)', () => {
     await call(token, users).expect(403);
   });
 
+  // HU-72: la vigilancia lee esto sin sesión; no debe contar nada más.
+  it('health exposes only the status and the error count', async () => {
+    const { body } = await api().get('/health').expect(200);
+    expect(body).toEqual({
+      status: 'ok',
+      timestamp: expect.any(String),
+      uptimeSeconds: expect.any(Number),
+      serverErrors: { lastHour: expect.any(Number), lastAt: null },
+    });
+  });
+
   it('does not let the client write its own IP or request id in the records', async () => {
     const res = await api()
       .get('/health')

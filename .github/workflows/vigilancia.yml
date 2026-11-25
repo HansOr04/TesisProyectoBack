@@ -1,0 +1,84 @@
+# Vigilancia de producción (HU-72): cada 15 minutos comprueba la API, la base,
+# los errores 500 y la web. Si algo falla abre un issue con la etiqueta
+# «alerta» (GitHub avisa por correo a quien lo tiene asignado y a quienes siguen
+# el repositorio) y lo cierra cuando todo vuelve a estar bien.
+#
+# GitHub puede retrasar las corridas programadas unos minutos. «simulacro»
+# prueba la alerta sin que haya una falla.
+name: Vigilancia
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulacro:
+        description: Abrir una alerta de prueba
+        type: boolean
+        default: false
+
+concurrency:
+  group: vigilancia
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  API_URL: https://evaluartesis-5deec07f5fd8.herokuapp.com
+  WEB_URL: https://evaluar-ochre.vercel.app
+
+jobs:
+  vigilar:
+    name: vigilar producción
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Comprobar API, base y web
+        id: comprobar
+        env:
+          SIMULACRO: ${{ inputs.simulacro }}
+        run: |
+          if [ "$SIMULACRO" = true ]; then
+            result="Simulacro de alerta: no hay ninguna falla."; code=1
+          else
+            result=$(scripts/vigilancia.sh) && code=0 || code=$?
+          fi
+          echo "$result" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "estado=$([ "$code" = 0 ] && echo bien || echo falla)"
+            echo "detalle<<FIN"; echo "$result"; echo "FIN"
+          } >> "$GITHUB_OUTPUT"
+      - name: Avisar al equipo
+        if: steps.comprobar.outputs.estado == 'falla'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETALLE: ${{ steps.comprobar.outputs.detalle }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create alerta --color B60205 --description 'Falla en producción' 2>/dev/null || true
+          body=$(printf '%s\n\n[Corrida](%s). Qué hacer: [docs/monitoreo.md](%s/%s/blob/main/docs/monitoreo.md).' \
+            "$DETALLE" "$RUN" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY")
+          open=$(gh issue list --label alerta --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$open" ]; then
+            gh issue create --title "Alerta de producción: $(echo "$DETALLE" | head -1)" \
+              --label alerta --assignee "$GITHUB_REPOSITORY_OWNER" --body "$body"
+          else
+            # Un aviso nuevo solo si cambió el problema, no cada 15 minutos.
+            last=$(gh issue view "$open" --json body,comments --jq '([.body] + [.comments[].body]) | last')
+            grep -qF "$(echo "$DETALLE" | sed 's/[0-9].*//' | head -1)" <<<"$last" \
+              || gh issue comment "$open" --body "$body"
+          fi
+      - name: Cerrar la alerta
+        if: steps.comprobar.outputs.estado == 'bien'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --label alerta --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Producción volvió a estar en orden ($(date -u +'%Y-%m-%d %H:%M') UTC)."
+          done
+      - name: Resultado
+        if: steps.comprobar.outputs.estado == 'falla' && !inputs.simulacro
+        run: exit 1
