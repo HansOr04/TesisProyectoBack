@@ -28,8 +28,7 @@ fuente; el sitio suma los de la web.
 
 ```bash
 pip install -r sitio/requirements.txt
-scripts/documentacion.sh build
-node scripts/ver-documentacion.mjs
+scripts/documentacion.sh serve -a localhost:8200
 ```
 
 Abre <http://localhost:8200>. El menú se define en `mkdocs.yml`. El workflow
