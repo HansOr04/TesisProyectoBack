@@ -120,8 +120,10 @@ permiso con `@RequireAssessmentPermission` y, si toca datos de una organización
    paralelo estilo, tipos, cobertura, integración, migraciones, mutación,
    seguridad y CodeQL. Si algo falla, no se puede integrar.
 3. Pull request de versión de `develop` a `main`. El pipeline corre otra vez.
-4. Al integrar en `main`, Heroku espera el pipeline en verde, compila, aplica las
-   migraciones y publica. Vercel publica la web. Primero el servidor y después la
+4. Al integrar en `main`, Heroku compila, aplica las migraciones y publica, y
+   Vercel publica la web. Los dos lo hacen **sin esperar** al pipeline de `main`
+   hasta que se active la espera (ver abajo): lo que protege es el pipeline del
+   pull request de versión, que tiene que estar en verde para integrar. Primero el servidor y después la
    web cuando un cambio abarca los dos.
 5. «Despliegue» espera a que termine y verifica producción. Después se sigue la
    [lista de verificación](lista-verificacion.md).
@@ -132,7 +134,14 @@ Antes de una versión con migraciones se saca un respaldo:
 heroku pg:backups:capture -a evaluartesis
 ```
 
-**Volver atrás.** Servidor: `heroku rollback -a evaluartesis`; no deshace
+**Que el despliegue espere al pipeline.** Se activa una vez en cada panel:
+
+- Heroku › `evaluartesis` › Deploy › Automatic deploys › «Wait for CI to pass
+  before deploy».
+- Vercel › `evaluar` › Settings › Deployment Checks: exigir «Estilo, tipos,
+  pruebas y compilación» antes de publicar en producción.
+
+**Volver atrás. Servidor: `heroku rollback -a evaluartesis`; no deshace
 migraciones. Web: panel de Vercel › Deployments › Instant Rollback. Si una
 migración dañó datos, se restaura el respaldo previo.
 
@@ -140,7 +149,7 @@ Variables y secretos: [entornos-y-secretos.md](entornos-y-secretos.md).
 
 **Publicar en un entorno nuevo.** En Heroku: crear la aplicación, agregar Heroku
 Postgres, definir las variables, conectar el repositorio con despliegue
-automático de `main` («Wait for CI») y ejecutar una vez `npm run prisma:seed:prod`.
+automático de `main` («Wait for CI to pass before deploy») y ejecutar una vez `npm run prisma:seed:prod`.
 En Vercel: importar el repositorio y definir `VITE_API_URL`. Cambiar la URL del
 servidor en `vercel.json`, y las de `despliegue.yml` y `vigilancia.yml`.
 

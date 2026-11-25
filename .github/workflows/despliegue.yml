@@ -1,6 +1,7 @@
-# Despliegue continuo del servidor. Cuando el CI termina en verde sobre main,
-# Heroku despliega ese commit (integración de GitHub: compila, corre las
-# migraciones en la fase release y publica). Este workflow espera a que el
+# Despliegue continuo del servidor. Al integrar en main, Heroku despliega ese
+# commit (integración de GitHub: compila, corre las migraciones en la fase
+# release y publica). Para que espere al CI hay que activar «Wait for CI to pass
+# before deploy» en Heroku. Este workflow espera a que el
 # despliegue de ESE commit termine y verifica la API en producción:
 #
 #   esperar despliegue ── salud ── seguridad de acceso ── CORS

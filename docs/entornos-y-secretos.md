@@ -11,7 +11,7 @@ guarda en el repositorio.
 | Local | `localhost:5173` (Vite) | `localhost:3100` | PostgreSQL en Docker (`docker-compose.yml`, puerto 5434) con el seed de demostración | A mano |
 | Pruebas automáticas | Compilación en GitHub Actions | Jest y Supertest en GitHub Actions | PostgreSQL 15 desechable, creada y destruida en cada ejecución | En cada pull request a `develop` y a `main` |
 | Vista previa de la web | URL propia de Vercel por cada pull request (entorno *Preview*) | La API de la demo | La de la demo | En cada pull request del repositorio web |
-| **Demo desplegada (entorno de pruebas con la fundación)** | Vercel, entorno *Production* (`evaluar-ochre.vercel.app`) | Heroku, aplicación `evaluartesis` | Heroku Postgres (complemento de la aplicación) | Al integrar en `main`, solo con la integración continua en verde |
+| **Demo desplegada (entorno de pruebas con la fundación)** | Vercel, entorno *Production* (`evaluar-ochre.vercel.app`) | Heroku, aplicación `evaluartesis` | Heroku Postgres (complemento de la aplicación) | Al integrar en `main`, con la integración continua del pull request en verde |
 
 Flujo de un cambio: rama `feature/*` o `fix/*` → pull request a `develop`
 (pruebas automáticas) → pull request de versión a `main` (pruebas otra vez)
