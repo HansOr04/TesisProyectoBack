@@ -11,8 +11,6 @@ import {
 
 const PREVIEW_MAX_KEYS = 6;
 
-// Registro de auditoría en BD. Nunca lanza hacia el caso de uso que lo llama:
-// una falla al auditar no debe deshacer la operación de negocio ya hecha.
 @Injectable()
 export class ActivityLogService {
   constructor(

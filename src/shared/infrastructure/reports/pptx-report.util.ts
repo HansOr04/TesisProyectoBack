@@ -1,19 +1,9 @@
 import { withExportSlot } from './export-limiter';
 import type PptxGenJS from 'pptxgenjs';
 
-// `pptxgenjs`'s CJS build does `module.exports = PptxGenJS` (no `.default`),
-// so a plain default import breaks under ts-jest (which honors tsconfig's
-// missing `esModuleInterop`) even though it works fine under the SWC runtime
-// Nest uses. A direct `require` + type cast works identically under both.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
 
-// Reporte de resultados con el formato de las presentaciones de diagnóstico:
-// barra lateral y títulos en el color de la herramienta (azul Organizativa,
-// naranja Capacidades, verde Riesgos), resultados en porcentaje y colores de
-// semáforo reservados para el nivel de cada puntaje. Todos los gráficos son
-// formas nativas, nunca gráficos de Office: así se ven igual en PowerPoint,
-// Keynote y Google Slides.
 export const REPORT_COLORS = {
   brand: '2F6B3B',
   ink: '1E2B24',
@@ -70,7 +60,6 @@ function theme(pptx: PptxGenJS): ReportTheme {
   );
 }
 
-/** Mezcla dos colores hex; `ratio` es la proporción del segundo. */
 export function mix(from: string, to: string, ratio: number): string {
   const a = parseInt(from, 16);
   const b = parseInt(to, 16);
@@ -85,9 +74,6 @@ export function mix(from: string, to: string, ratio: number): string {
     .toUpperCase();
 }
 
-// ── Escala ───────────────────────────────────────────────────────────────
-
-/** Puntaje de 0 a 10 llevado a porcentaje entero. */
 export function scorePct(score: number): number {
   return Math.round(Math.max(0, Math.min(10, score)) * 10);
 }
@@ -113,8 +99,6 @@ export function tierLevel(score: number): 'Bajo' | 'Medio' | 'Alto' {
   if (score < 7) return 'Medio';
   return 'Alto';
 }
-
-// ── Utilidades de texto ──────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('es-EC', {
@@ -148,14 +132,12 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out.length > 0 ? out : [[]];
 }
 
-/** Tamaño de letra que deja entrar el texto en la caja (estimación por área). */
 function fitFontSize(
   text: string,
   w: number,
   h: number,
   max: number,
   min: number,
-  /** Ancho medio de un carácter en em: 0,46 para texto, más para negritas grandes. */
   charEm = 0.46,
   lineEm = 1.25,
 ): number {
@@ -182,8 +164,6 @@ function initialsOf(name: string): string {
     .join('');
   return letters || name.slice(0, 2).toUpperCase();
 }
-
-// ── Presentación y marco de cada lámina ──────────────────────────────────
 
 export function createReportPptx(
   footerLabel?: string,
@@ -374,8 +354,6 @@ function levelBadge(score: number) {
   };
 }
 
-// ── Portada ──────────────────────────────────────────────────────────────
-
 export function addCoverSlide(
   pptx: PptxGenJS,
   opts: {
@@ -390,7 +368,6 @@ export function addCoverSlide(
   const t = theme(pptx);
   const slide = pptx.addSlide();
   slide.background = { color: t.dark };
-  // Círculos de fondo en el color de la herramienta, como motivo de portada.
   slide.addShape(pptx.ShapeType.ellipse, {
     x: 8.6,
     y: -1.6,
@@ -511,8 +488,6 @@ export function addCoverSlide(
   );
 }
 
-// ── Resultados globales: barras horizontales por sección ─────────────────
-
 export interface ResultCard {
   label: string;
   caption: string;
@@ -624,7 +599,6 @@ export function addGlobalResultsSlide(
     });
   });
 
-  // Promedio global: línea y etiqueta sobre el gráfico.
   const avg = scorePct(opts.globalScore);
   const avgX = chartX + (avg / 100) * chartW;
   slide.addShape(pptx.ShapeType.line, {
@@ -764,14 +738,11 @@ function addResultCards(
   });
 }
 
-// ── Lectura ejecutiva y fortalezas/brechas ───────────────────────────────
-
 export interface InsightPoint {
   title: string;
   detail: string;
 }
 
-/** Lista de puntos con viñeta: "Título: detalle". */
 function addPointList(
   slide: PptxGenJS.Slide,
   points: InsightPoint[],
@@ -920,11 +891,6 @@ function addPointsCard(
   );
 }
 
-// ── Resumen ejecutivo: velocímetro del resultado global y síntesis ──────
-
-// Ángulos OOXML: 0° al este, creciendo en sentido horario. El semicírculo
-// superior va de 180° (0 %) a 360° (100 %). Cortes del semáforo: rojo hasta
-// 50 %, amarillo hasta 70 %, verde desde 70 %.
 const GAUGE_ZONES: Array<[number, number, string]> = [
   [180, 270, REPORT_COLORS.tierRed],
   [270, 306, REPORT_COLORS.tierAmber],
@@ -996,7 +962,6 @@ export function addExecutiveSummarySlide(
     kicker: string;
     title: string;
     globalScore: number;
-    /** "Capacidad alta", "Capacidad media"… */
     level: string;
     narrative: string;
   },
@@ -1081,7 +1046,6 @@ export function addExecutiveSummarySlide(
     },
   );
 
-  // Síntesis.
   const rx = X0 + leftW + 0.3;
   const rw = RIGHT - rx;
   slide.addShape(pptx.ShapeType.roundRect, {
@@ -1203,8 +1167,6 @@ export function addExecutiveReadingSlide(
   });
 }
 
-// ── Una lámina por sección: avance, fortalezas, brechas y semáforo ───────
-
 function drawTrafficLight(
   pptx: PptxGenJS,
   slide: PptxGenJS.Slide,
@@ -1266,7 +1228,6 @@ export function addSectionDetailSlide(
   const pct = scorePct(opts.score);
   const color = tierColor(opts.score);
 
-  // Avance hacia la meta del 100 %.
   const trackY = 2.08;
   slide.addText('0 %', {
     x: X0,
@@ -1364,7 +1325,6 @@ export function addSectionDetailSlide(
     emptyText: 'Todos los KPI de esta sección tienen un nivel alto.',
   });
 
-  // Tarjeta del semáforo.
   const cx = RIGHT - cardW;
   slide.addShape(pptx.ShapeType.roundRect, {
     x: cx,
@@ -1483,8 +1443,6 @@ export function addSectionDetailSlide(
   }
 }
 
-// ── Tabla genérica paginada ──────────────────────────────────────────────
-
 export type TableCell =
   | string
   | {
@@ -1496,12 +1454,10 @@ export type TableCell =
 
 export interface TableColumn {
   header: string;
-  /** Ancho relativo; se reparte sobre el ancho útil de la lámina. */
   weight: number;
   align?: 'left' | 'center' | 'right';
 }
 
-/** Cifras en píldoras sobre una tabla o un gráfico. */
 function addChips(
   pptx: PptxGenJS,
   slide: PptxGenJS.Slide,
@@ -1592,11 +1548,6 @@ function styledTable(
   });
 }
 
-/**
- * Tabla con encabezado en el color de la herramienta y filas alternas
- * teñidas; cada lámina repite el encabezado. `summary` son cifras en
- * píldoras sobre la tabla.
- */
 export function addTableSlide(
   pptx: PptxGenJS,
   opts: {
@@ -1654,10 +1605,6 @@ export function addTableSlide(
   });
 }
 
-/**
- * Reparte las filas en láminas según el alto estimado de cada una (las
- * celdas largas ocupan varias líneas), sin pasar de `maxRows` por lámina.
- */
 function paginateRows(
   columns: TableColumn[],
   rows: TableCell[][],
@@ -1703,8 +1650,6 @@ function paginateRows(
   pages.push(current);
   return pages;
 }
-
-// ── Lista numerada (hallazgos y recomendaciones) ─────────────────────────
 
 export function addNumberedListSlide(
   pptx: PptxGenJS,
@@ -1765,8 +1710,6 @@ export function addNumberedListSlide(
     });
   });
 }
-
-// ── Barra apilada (proporciones de un total) ─────────────────────────────
 
 export function addProportionBar(
   pptx: PptxGenJS,
@@ -1871,8 +1814,6 @@ export function addClassificationSlide(
   });
 }
 
-// ── Resumen del plan de acción ───────────────────────────────────────────
-
 export type PlanMeasure = {
   name: string;
   kpi?: string;
@@ -1889,7 +1830,6 @@ export function addPlanSummarySlide(
     title: string;
     subtitle?: string;
     measures: PlanMeasure[];
-    /** KPI críticos (o riesgos) que todavía no tienen medida. */
     uncovered: { label: string; value: number };
   },
 ): void {
@@ -1977,7 +1917,6 @@ export function addPlanSummarySlide(
     });
   });
 
-  // Avance promedio del plan.
   const barY = CONTENT_TOP + 1.45;
   slide.addText(
     [
@@ -2035,7 +1974,6 @@ export function addPlanSummarySlide(
     );
     return;
   }
-  // Primero lo que vence antes y no está concluido.
   const order = { IN_PROGRESS: 0, PENDING: 1, DONE: 2 } as const;
   const shown = [...ms]
     .sort(
@@ -2093,8 +2031,6 @@ export function addPlanSummarySlide(
     );
   }
 }
-
-// ── FODA ─────────────────────────────────────────────────────────────────
 
 export function addSwotSlide(
   pptx: PptxGenJS,
@@ -2208,8 +2144,6 @@ export function addSwotSlide(
   });
 }
 
-// ── Cronograma (Gantt) ───────────────────────────────────────────────────
-
 export type TimelineMeasure = {
   name: string;
   detail?: string;
@@ -2266,7 +2200,6 @@ export function addTimelineSlide(
     { text: `${counts.PENDING} pendientes`, color: REPORT_COLORS.muted },
   ];
 
-  // Escala por meses completos, del mes de la primera medida al de la última.
   const first = dated[0]?.startDate;
   const last = dated.length
     ? new Date(Math.max(...dated.map((m) => m.endDate.getTime())))
@@ -2320,7 +2253,6 @@ export function addTimelineSlide(
       fontFace: FONT,
       margin: 0,
     });
-    // Meses: etiqueta y línea vertical; si son muchos, se etiqueta uno de cada n.
     const months: Date[] = [];
     for (
       let d = new Date(start);
@@ -2443,8 +2375,6 @@ export function addTimelineSlide(
   });
 }
 
-// ── Evolución entre evaluaciones: barras y línea ─────────────────────────
-
 export type EvolutionPoint = {
   date: Date;
   globalScore: number;
@@ -2452,7 +2382,6 @@ export type EvolutionPoint = {
   measuresDone: number;
 };
 
-/** Barras por evaluación completada, línea de tendencia y tabla de variaciones. */
 export function addEvolutionSlide(
   pptx: PptxGenJS,
   opts: { kicker?: string; title: string; points: EvolutionPoint[] },
@@ -2536,7 +2465,6 @@ export function addEvolutionSlide(
       margin: 0,
     });
   });
-  // Línea de tendencia que une las barras, en el color de la herramienta.
   for (let i = 1; i < tops.length; i++) {
     const a = tops[i - 1];
     const b = tops[i];
@@ -2563,7 +2491,6 @@ export function addEvolutionSlide(
   const tableX = chartX + chartW + 0.45;
   const tableW = RIGHT - tableX;
   const rows: TableCell[][] = points.map((p, i) => {
-    // Se compara ya redondeado, como se muestra.
     const delta =
       i === 0
         ? null

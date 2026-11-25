@@ -14,7 +14,6 @@ import {
 
 export interface AuthenticatedSession {
   accessToken: string;
-  /** Solo para el controlador: va a la cookie HttpOnly, nunca al cuerpo. */
   refreshToken: string;
   refreshExpiresAt: Date;
   user: {
@@ -26,8 +25,6 @@ export interface AuthenticatedSession {
   };
 }
 
-// Casos de uso de autenticación. No sabe de bcrypt, JWT ni Google: habla
-// con puertos (DIP) y por eso se puede probar sin red ni criptografía real.
 @Injectable()
 export class AuthService {
   private unknownAccountHash?: Promise<string>;
@@ -50,8 +47,6 @@ export class AuthService {
       include: { memberships: { select: { organisationId: true } } },
     });
     if (!user || !user.isActive || user.deletedAt || !user.passwordHash) {
-      // Mismo tiempo de respuesta que con una cuenta real: si no, se podría
-      // averiguar qué correos existen.
       this.unknownAccountHash ??= this.hasher.hash(randomUUID());
       await this.hasher.compare(password, await this.unknownAccountHash);
       throw new UnauthorizedException('Credenciales inválidas');
@@ -69,9 +64,6 @@ export class AuthService {
   ): Promise<AuthenticatedSession> {
     const identity = await this.oauth.verify(idToken);
 
-    // 1) usuario ya vinculado al proveedor; 2) usuario existente por email
-    // (se vincula); 3) no existe → se rechaza: las cuentas las crea un admin
-    // o el seed, para que no entre cualquiera con una cuenta de Google.
     let user = await this.prisma.user.findFirst({
       where: {
         oauthProvider: identity.provider,
@@ -102,7 +94,6 @@ export class AuthService {
     return this.buildSession(user, userAgent);
   }
 
-  /** Rota el refresh token y emite un nuevo token de acceso. */
   async refresh(
     rawRefreshToken: string,
     userAgent?: string,

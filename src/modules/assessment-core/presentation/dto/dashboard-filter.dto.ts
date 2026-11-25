@@ -6,9 +6,6 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// RF-07/F6-B01: filtros del panel consolidado. Todos opcionales — sin
-// filtros, el endpoint devuelve todas las organizaciones visibles para el
-// usuario (ya recortadas por AssessmentAccessScopeService si es evaluador).
 export class DashboardFilterDto {
   @IsOptional()
   @IsIn(['ORGANIZATIONAL', 'CAPACITY', 'RISK'])

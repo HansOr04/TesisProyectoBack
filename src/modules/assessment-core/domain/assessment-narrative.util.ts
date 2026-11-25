@@ -2,7 +2,7 @@ export type AssessmentNarrativeTool = 'ORGANIZATIONAL' | 'CAPACITY' | 'RISK';
 
 export interface AssessmentNarrativeProfile {
   name: string;
-  type: string; // "ASSOCIATION" | "COMPANY"
+  type: string;
   yearStarted?: number | null;
   memberCount?: number | null;
   mainActivity?: string | null;
@@ -14,7 +14,7 @@ export interface AssessmentNarrativeProfile {
 export interface AssessmentNarrativeSection {
   number: number;
   name: string;
-  weightedAvg: number; // 0-10
+  weightedAvg: number;
 }
 
 const SPANISH_COUNT_WORDS: Record<number, string> = {
@@ -38,11 +38,6 @@ function orgLabel(type: string): string {
   return type === 'ASSOCIATION' ? 'la asociación' : 'la organización';
 }
 
-// Resumen ejecutivo determinístico (sin IA) a partir de los datos de perfil
-// (inicio de actividades, socios, producto, mercados) + los porcentajes de
-// cumplimiento por sección de la evaluación (weightedAvg/10 -> %). Sirve
-// como narrativa por defecto del reporte cuando no se provee una manual/IA,
-// para que el "Resumen Ejecutivo" nunca quede en blanco.
 export function buildExecutiveNarrative(
   profile: AssessmentNarrativeProfile,
   sections: AssessmentNarrativeSection[],
@@ -54,7 +49,6 @@ export function buildExecutiveNarrative(
   const memberText =
     profile.memberCount != null ? String(profile.memberCount) : '';
   const activityText = profile.mainActivity ?? '';
-  // Sin el punto final, que la oración ya agrega ("EE. UU." quedaba "EE. UU..").
   const marketsText = (profile.mainMarkets ?? '').replace(/\.+\s*$/, '');
 
   let intro =

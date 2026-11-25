@@ -116,9 +116,6 @@ describe('AssessmentApplicabilityService', () => {
     });
   });
 
-  // Las exclusiones se guardan por id, pero cada versión de plantilla tiene
-  // ids nuevos: se resuelven por código (KPI) y por número (sección) para que
-  // sigan valiendo en las evaluaciones que corren sobre versiones anteriores.
   describe('resolución entre versiones de plantilla', () => {
     const scope = { organisation: 'mh', tool: 'ORGANIZATIONAL' };
 
@@ -148,8 +145,6 @@ describe('AssessmentApplicabilityService', () => {
           indicator: { code: 'KPI 1.1', section: { template: scope } },
         },
       ]);
-      // La consulta acota por organización y herramienta; Riesgos usa los
-      // mismos códigos y no debe entrar.
       prisma.assessmentIndicator.findMany.mockResolvedValue([
         { id: 'org-ind', code: 'KPI 1.1', section: { template: scope } },
         {

@@ -5,8 +5,6 @@ import { AppModule } from '../src/app.module';
 
 jest.setTimeout(60 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
-// Los endpoints deben responder con estructura válida aunque no haya datos demo.
 const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',

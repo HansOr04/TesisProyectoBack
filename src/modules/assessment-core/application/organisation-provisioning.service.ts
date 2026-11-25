@@ -15,17 +15,6 @@ export interface ProvisionedTemplate {
   indicators: number;
 }
 
-/**
- * Aprovisiona una organización recién creada con lo que necesita para operar:
- * las tres plantillas de evaluación (versión 1, activa) con sus secciones y
- * KPI, y los parámetros de riesgo por país.
- *
- * Es la misma lógica que `prisma/seeds/assessment.seed.ts`, pero como servicio
- * de aplicación para poder crear organizaciones desde la API en vez de exigir
- * acceso a la consola del servidor. Idempotente (upsert por clave natural):
- * volver a ejecutarlo sobre una organización existente actualiza los textos de
- * la plantilla sin duplicar nada ni tocar las evaluaciones ya hechas.
- */
 @Injectable()
 export class OrganisationProvisioningService {
   private readonly templates: AssessmentSeedTemplate[] = [
@@ -80,7 +69,6 @@ export class OrganisationProvisioningService {
       create: { organisation, tool: seed.tool, version: 1, ...common },
     });
 
-    // Umbral de riesgo por país (luego editable desde administración).
     for (const [country, params] of Object.entries(
       seed.countryRiskParams ?? {},
     )) {

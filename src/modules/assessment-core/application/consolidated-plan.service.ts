@@ -5,12 +5,6 @@ import {
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 
-/**
- * Alcance del Gantt que se pide al exportar el reporte:
- * - `tool`: solo el plan de la evaluación que se está exportando.
- * - `organisation`: las tres herramientas de esa organización evaluada.
- * - `project`: todas las organizaciones del proyecto.
- */
 export type ConsolidatedPlanScope = 'tool' | 'organisation' | 'project';
 
 export const CONSOLIDATED_PLAN_SCOPES: ConsolidatedPlanScope[] = [
@@ -25,11 +19,9 @@ export interface ConsolidatedMeasure {
   endDate: Date;
   status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
   progressPct: number;
-  /** Herramienta u organización de la que viene, para agrupar en el Gantt. */
   group: string;
 }
 
-/** Una medida del plan de una organización, venga de la herramienta que venga. */
 export interface ProfilePlanMeasure {
   id: string;
   tool: 'ORGANIZATIONAL' | 'CAPACITY' | 'RISK';
@@ -53,15 +45,6 @@ const TOOL_LABEL: Record<string, string> = {
   RISK: 'Riesgos',
 };
 
-/**
- * Reúne el plan de acción de varias evaluaciones en una sola lista para el
- * Gantt del reporte.
- *
- * Las medidas viven en dos tablas y no se pueden unir en SQL: las de KPI
- * (Organizativa y Capacidades) cuelgan de la evaluación, y las de mitigación
- * (Riesgos) cuelgan del riesgo. Aquí se leen las dos y se normalizan a la
- * misma forma — `startWeek` de las de riesgo es su fecha de inicio.
- */
 @Injectable()
 export class ConsolidatedPlanService {
   constructor(private readonly prisma: PrismaService) {}
@@ -71,7 +54,6 @@ export class ConsolidatedPlanService {
     filter: {
       profileId?: string;
       groupBy: 'tool' | 'profile';
-      /** Con alcance recortado, solo las organizaciones que el usuario ve. */
       profileScope?: AssessmentProfileScope;
     },
   ): Promise<ConsolidatedMeasure[]> {
@@ -140,8 +122,6 @@ export class ConsolidatedPlanService {
       })),
     ];
 
-    // El Gantt se lee en orden cronológico y, dentro de una misma fecha,
-    // agrupado para que las barras del mismo origen queden juntas.
     return rows.sort(
       (a, b) =>
         a.startDate.getTime() - b.startDate.getTime() ||
@@ -150,14 +130,6 @@ export class ConsolidatedPlanService {
     );
   }
 
-  /**
-   * Plan de acción completo de una organización evaluada: las medidas de las
-   * tres herramientas, de todas sus evaluaciones, con lo necesario para verlas
-   * juntas (KPI de origen, responsable, avance y lo implementado). Solo lee.
-   *
-   * Las medidas de riesgo no guardan el KPI: cuelgan del riesgo, que guarda
-   * el id del indicador, así que los códigos se buscan aparte.
-   */
   async profilePlan(
     organisation: string,
     profileId: string,
@@ -270,17 +242,6 @@ export class ConsolidatedPlanService {
     );
   }
 
-  /**
-   * Resuelve el Gantt del reporte para un alcance dado. Devuelve `undefined`
-   * en `tool` para que cada herramienta siga dibujando el suyo, que ya tiene
-   * el detalle medida a medida.
-   *
-   * En los alcances mayores no se dibuja una barra por medida: un proyecto
-   * con cuatrocientas medidas daría setenta láminas y dejaría de ser una
-   * vista consolidada. Se agrega una barra por grupo —herramienta u
-   * organización— que abarca desde el inicio más temprano hasta el fin más
-   * tardío de su plan, con el avance promedio.
-   */
   async gantt(
     organisation: string,
     scope: ConsolidatedPlanScope,

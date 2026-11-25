@@ -1,10 +1,3 @@
-# Vigilancia de producción (HU-72): cada 15 minutos comprueba la API, la base,
-# los errores 500 y la web. Si algo falla abre un issue con la etiqueta
-# «alerta» (GitHub avisa por correo a quien lo tiene asignado y a quienes siguen
-# el repositorio) y lo cierra cuando todo vuelve a estar bien.
-#
-# GitHub puede retrasar las corridas programadas unos minutos. «simulacro»
-# prueba la alerta sin que haya una falla.
 name: Vigilancia
 
 on:
@@ -66,7 +59,6 @@ jobs:
             gh issue create --title "Alerta de producción: $(echo "$DETALLE" | head -1)" \
               --label alerta --assignee "$GITHUB_REPOSITORY_OWNER" --body "$body"
           else
-            # Un aviso nuevo solo si cambió el problema, no cada 15 minutos.
             last=$(gh issue view "$open" --json body,comments --jq '([.body] + [.comments[].body]) | last')
             grep -qF "$(echo "$DETALLE" | sed 's/[0-9].*//' | head -1)" <<<"$last" \
               || gh issue comment "$open" --body "$body"

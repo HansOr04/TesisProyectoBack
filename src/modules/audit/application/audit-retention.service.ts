@@ -4,9 +4,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import { StructuredLoggerService } from '../../../shared/infrastructure/logging/structured-logger.service';
 
-// Política de retención de la auditoría: los registros más antiguos que
-// ACTIVITY_LOG_RETENTION_MONTHS (24 por defecto) se purgan cada noche. Los
-// refresh tokens vencidos/revocados se limpian en la misma pasada.
 @Injectable()
 export class AuditRetentionService {
   private readonly retentionMonths: number;

@@ -7,9 +7,6 @@ import { CapacityToolAiService } from './application/capacity-tool-ai.service';
 import { CapacityToolService } from './application/capacity-tool.service';
 import { CapacityToolController } from './presentation/controllers/capacity-tool.controller';
 
-// Herramienta de Capacidades. El flujo genérico y los adaptadores de persistencia
-// vienen de EvaluationToolModule; del núcleo: auditoría, aplicabilidad, alcance
-// y guards; del módulo de IA: el cliente LLM; del de sesión: el gateway.
 @Module({
   imports: [
     AssessmentCoreModule,

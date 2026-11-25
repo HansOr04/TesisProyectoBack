@@ -6,10 +6,6 @@ import {
 } from '../../audit/domain/activity-log.types';
 import { RequestContextService } from '../../identity/application/request-context.service';
 
-// Wrapper fino y tipado sobre ActivityLogService: cada acción auditable de
-// Assessment tiene un nombre estable que el historial de roles y los reportes
-// pueden consultar. Nuevos bloques extienden AssessmentAuditAction sin tocar
-// el resto del servicio.
 export type AssessmentAuditAction =
   | 'organisation.create'
   | 'organisation.update'

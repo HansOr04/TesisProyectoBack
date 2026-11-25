@@ -1,4 +1,3 @@
-# Debian slim (no Alpine): Prisma 5 necesita OpenSSL y glibc para sus engines.
 FROM node:20-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -15,11 +14,9 @@ ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci --omit=dev
-# tsconfig + src: `prisma db seed` corre con ts-node e importa las plantillas desde src/
 COPY tsconfig.json ./
 COPY src ./src
 COPY --from=build /app/dist ./dist
-# Nunca como root: el usuario `node` viene en la imagen oficial.
 RUN chown -R node:node /app
 USER node
 EXPOSE 3100

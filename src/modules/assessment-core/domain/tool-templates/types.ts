@@ -1,17 +1,17 @@
 export interface AssessmentSeedIndicator {
-  code: string; // p.ej. "KPI 1.3"
+  code: string;
   name: string;
   description?: string;
-  helpText?: string; // qué documento/proceso concreto debe existir para este KPI
-  scoringRubric?: string; // nota específica de este KPI, complementa la rúbrica genérica 1-10
-  weight: number; // peso del KPI dentro de la sección
+  helpText?: string;
+  scoringRubric?: string;
+  weight: number;
 }
 
 export interface AssessmentSeedSection {
-  number: number; // dimensión (Organizational) | área estratégica (Capacity) | principio (Risk)
+  number: number;
   name: string;
   description?: string;
-  weight: number; // peso de la sección en el promedio ponderado global
+  weight: number;
   indicators: AssessmentSeedIndicator[];
 }
 
@@ -25,8 +25,6 @@ export interface AssessmentSeedTemplate {
   description?: string;
   labels?: Record<string, Record<string, string>>;
   sections: AssessmentSeedSection[];
-  // Risk únicamente (RF-02): el país de la organización evaluada determina el umbral
-  // de despreciabilidad efectivo. countryRiskParams[profile.country] ?? riskThreshold.
   riskThreshold?: number;
   countryRiskParams?: Record<string, AssessmentCountryRiskParams>;
 }

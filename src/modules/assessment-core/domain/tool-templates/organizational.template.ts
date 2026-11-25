@@ -2,21 +2,6 @@ import { AssessmentSeedTemplate, AssessmentSeedIndicator } from './types';
 
 const CODE_PREFIX = 'KPI';
 
-// KPI reales de la Herramienta Organizativa (Diagnóstico Asociativo), transcritos del Excel original
-// de la herramienta (HERRAMIENTA ORGANIZATIONAL DIAGNOSTICO ASOCIATIVO_V3_2025.xlsm, hoja "DATA 6 DIM"):
-// nombre, cálculo del indicador y peso exactos por KPI dentro de cada dimensión (los 6 totales
-// de peso ya suman 100 en el archivo fuente). 73 KPI en 6 dimensiones.
-//
-// helpText: instructivo detallado por KPI — nombre exacto del/los documento(s) o registro(s)
-// requerido(s), qué campos debe tener, quién lo firma/llena, y dónde/cómo verificarlo. A
-// diferencia de Capacidades/Riesgos, Organizational no evalúa cumplimiento legal sino fortalecimiento
-// organizativo (capacidad de la asociación de sostener ese cumplimiento en el tiempo: gobernanza,
-// finanzas, personal, mercado) — por eso los documentos son administrativos/organizativos (actas,
-// contratos, roles de pago, balances, manuales), no permisos ambientales. No usa sintaxis
-// markdown (el texto se renderiza en un <p> plano con whitespace-pre-line).
-// scoringRubric: rúbrica de 5 bandas ESPECÍFICA de cada KPI (no genérica) con umbrales/criterios
-// concretos derivados del propio cálculo del indicador en el Excel original.
-
 interface IndicatorSeed {
   name: string;
   description: string;

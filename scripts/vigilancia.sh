@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
-# Vigilancia de producción (HU-72). Comprueba la API, la base y la web; si algo
-# falla escribe el motivo en la salida (una línea por problema) y termina con 1.
-# La usa .github/workflows/vigilancia.yml y también sirve a mano:
-#   API_URL=https://… WEB_URL=https://… scripts/vigilancia.sh
 set -uo pipefail
 : "${API_URL:?}" "${WEB_URL:?}"
 RETRIES=${RETRIES:-3}
 WAIT=${WAIT:-20}
 problems=()
 
-# Un corte de segundos (un despliegue, el reinicio diario) no es una falla.
 for _ in $(seq 1 "$RETRIES"); do
   status=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 20 "$API_URL/health")
   [ "$status" = 200 ] && break

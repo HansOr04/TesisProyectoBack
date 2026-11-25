@@ -45,8 +45,6 @@ import {
 import { AssessmentAccessScopeService } from '../../../assessment-core/application/assessment-access-scope.service';
 import { AssessmentAiThrottlerGuard } from '../../../assessment-core/presentation/guards/assessment-ai-throttler.guard';
 
-// RF-05/RF-06: Herramienta de Riesgos — principios, KPI, evaluaciones, riesgo y plan de
-// mitigación con Gantt.
 @ApiTags('Herramienta de Riesgos')
 @ApiBearerAuth()
 @Controller()
@@ -66,8 +64,6 @@ export class RiskToolController {
     private readonly accessScope: AssessmentAccessScopeService,
   ) {}
 
-  // Panel general (panel general): organizaciones + última evaluación Risk.
-  // RF-07/F6-B03: un assessment_evaluator solo ve las organizaciones que tiene asignadas.
   @Get(':org/assessments/risk/organisations-overview')
   @RequireAssessmentPermission('risk-tool', 'read')
   async organisationsOverview(@Param('org') org: string) {
@@ -80,8 +76,6 @@ export class RiskToolController {
     );
     return this.toolService.organisationsOverview(org, scope);
   }
-
-  // ── Parámetros de riesgo por país (administración) ─────────────────────
 
   @Get(':org/assessments/risk/country-params')
   @RequireAssessmentPermission('risk-tool', 'read')
@@ -114,8 +108,6 @@ export class RiskToolController {
     await this.toolService.deleteCountryParam(org, country, user?.id);
     return { success: true };
   }
-
-  // ── Estructura ──────────────────────────────────────────────────────────
 
   @Get(':org/assessments/risk/templates')
   @RequireAssessmentPermission('risk-tool', 'read')
@@ -216,8 +208,6 @@ export class RiskToolController {
     return { success: true };
   }
 
-  // ── Evaluaciones y respuestas (RF-05) ────────────────────────────────────
-
   @Post(':org/assessments/risk/evaluations')
   @RequireAssessmentPermission('risk-tool', 'write')
   @ScopedTo('profile', 'profileId', 'body')
@@ -287,8 +277,6 @@ export class RiskToolController {
   ) {
     return this.toolService.evaluationHistory(org, profileId);
   }
-
-  // ── Riesgos y plan de mitigación (RF-05/RF-06) ──────────────────────────
 
   @Get(':org/assessments/risk/evaluations/:id/risks')
   @RequireAssessmentPermission('risk-tool', 'read')
@@ -360,7 +348,6 @@ export class RiskToolController {
     @Res() res: Response,
   ) {
     const user = await this.requestContext.requireCurrentUser();
-    // «Todo el proyecto» de un evaluador abarca solo sus organizaciones.
     const scope = await this.accessScope.resolveProfileScope(
       org,
       user.id,
@@ -381,9 +368,6 @@ export class RiskToolController {
     );
     res.send(result.data);
   }
-
-  // ── Asistencia con IA ────────────────────────────────────────────────────
-  // LLM10: 10 solicitudes/minuto por usuario en toda esta sección.
 
   @Post(
     ':org/assessments/risk/evaluations/:id/responses/:indicatorId/improve-observation',
@@ -442,9 +426,6 @@ export class RiskToolController {
     return this.toolService.suggestMeasuresForEvaluation(org, id, user?.id);
   }
 
-  // 5.ª capacidad de la Alternativa 1: ranking determinístico, sin costo de
-  // IA — por eso vive fuera de la sección de asistencia con IA (sin throttle
-  // ni auditoría de assessment-ai.call).
   @Get(':org/assessments/risk/evaluations/:id/impact-priority')
   @RequireAssessmentPermission('risk-tool', 'read')
   @ScopedTo('evaluation')

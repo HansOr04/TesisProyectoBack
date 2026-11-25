@@ -7,9 +7,6 @@ import { PrismaEvaluationRepository } from './infrastructure/persistence/prisma-
 import { PrismaIndicatorMeasureRepository } from './infrastructure/persistence/prisma-indicator-measure.repository';
 import { PrismaTemplateRepository } from './infrastructure/persistence/prisma-template.repository';
 
-// Núcleo compartido de las herramientas de evaluación: puertos de persistencia
-// (plantillas, evaluaciones, medidas por KPI) con sus adaptadores Prisma.
-// Las herramientas concretas extienden los servicios genéricos de application/.
 @Module({
   imports: [AssessmentCoreModule],
   providers: [

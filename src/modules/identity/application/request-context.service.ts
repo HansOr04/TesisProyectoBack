@@ -5,9 +5,6 @@ import { User } from '@prisma/client';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import { AUTH_CONTEXT_KEY, AuthContext } from '../domain/auth-context';
 
-// Acceso a la petición actual (usuario autenticado, ip, request-id) sin
-// pasar todo por parámetros de controlador. Request-scoped en HTTP; en
-// tests/scripts se inyecta sin REQUEST y devuelve valores vacíos.
 @Injectable({ scope: Scope.REQUEST })
 export class RequestContextService {
   private cachedUser: User | null | undefined = undefined;
@@ -33,7 +30,6 @@ export class RequestContextService {
     return this.getAuthContext()?.isSuperAdmin === true;
   }
 
-  /** Superadministrador de la plataforma, aunque no sea dueño del proyecto actual. */
   getCurrentUserIsPlatformSuperAdmin(): boolean {
     return this.getAuthContext()?.isPlatformSuperAdmin === true;
   }
@@ -48,9 +44,6 @@ export class RequestContextService {
   }
 
   getRequestIp(): string | undefined {
-    // Express ya resuelve X-Forwarded-For según «trust proxy»: leer la
-    // cabecera aquí dejaba que el cliente escribiera cualquier IP en la
-    // auditoría.
     return this.request?.ip;
   }
 

@@ -10,10 +10,6 @@ export class ExportPptxDto {
   @MaxLength(4000)
   narrative?: string;
 
-  /**
-   * Qué abarca el Gantt del reporte: solo esta herramienta (por defecto), las
-   * tres de la organización, o todas las organizaciones del proyecto.
-   */
   @IsOptional()
   @IsIn(CONSOLIDATED_PLAN_SCOPES)
   ganttScope?: ConsolidatedPlanScope;

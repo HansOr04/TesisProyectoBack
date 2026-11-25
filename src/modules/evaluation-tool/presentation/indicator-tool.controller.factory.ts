@@ -49,13 +49,9 @@ import {
 } from './dto';
 
 export interface IndicatorToolControllerConfig {
-  /** Segmento de ruta de la herramienta: "organizational" | "capacity". */
   segment: string;
-  /** Segmento de ruta de las secciones: "dimensions" | "areas". */
   sectionSegment: string;
-  /** Código del módulo de permisos (AppModule.code). */
   module: (typeof ASSESSMENT_MODULE_CODES)[keyof typeof ASSESSMENT_MODULE_CODES];
-  /** Clase del servicio concreto que Nest inyecta. */
   service: Type<IndicatorMeasureToolService>;
 }
 
@@ -68,11 +64,6 @@ function sendFile(res: Response, file: FileExport) {
   res.send(file.data);
 }
 
-/**
- * Construye el controlador REST de una herramienta basada en KPI. Las rutas,
- * permisos y cuerpos son idénticos entre herramientas: solo cambian el
- * segmento de URL, el nombre de la sección y el módulo de permisos.
- */
 export function createIndicatorToolController(
   cfg: IndicatorToolControllerConfig,
 ) {
@@ -99,8 +90,6 @@ export function createIndicatorToolController(
       readonly accessScope: AssessmentAccessScopeService,
     ) {}
 
-    // Panel general: organizaciones + última evaluación de la herramienta.
-    // Un assessment_evaluator solo ve las organizaciones que tiene asignadas.
     @Get(`${base}/organisations-overview`)
     @RequireAssessmentPermission(mod, 'read')
     async organisationsOverview(@Param('org') org: string) {
@@ -113,8 +102,6 @@ export function createIndicatorToolController(
       );
       return this.toolService.organisationsOverview(org, scope);
     }
-
-    // ── Estructura ────────────────────────────────────────────────────────
 
     @Get(`${base}/templates`)
     @RequireAssessmentPermission(mod, 'read')
@@ -220,8 +207,6 @@ export function createIndicatorToolController(
       return { success: true };
     }
 
-    // ── Evaluaciones y respuestas ─────────────────────────────────────────
-
     @Post(`${base}/evaluations`)
     @RequireAssessmentPermission(mod, 'write')
     @ScopedTo('profile', 'profileId', 'body')
@@ -304,7 +289,6 @@ export function createIndicatorToolController(
       @Res() res: Response,
     ) {
       const user = await this.requestContext.requireCurrentUser();
-      // «Todo el proyecto» de un evaluador abarca solo sus organizaciones.
       const scope = await this.accessScope.resolveProfileScope(
         org,
         user.id,
@@ -332,8 +316,6 @@ export function createIndicatorToolController(
     ) {
       return this.toolService.evaluationHistory(org, profileId);
     }
-
-    // ── Plan de acción (KPI crítico → medida) ─────────────────────────────
 
     @Get(`${base}/evaluations/:id/measures`)
     @RequireAssessmentPermission(mod, 'read')
@@ -365,8 +347,6 @@ export function createIndicatorToolController(
       const user = await this.requestContext.getCurrentUser();
       return this.toolService.updateMeasureProgress(org, id, dto, user?.id);
     }
-
-    // ── Asistencia con IA (10 solicitudes/minuto por usuario) ─────────────
 
     @Post(`${base}/evaluations/:id/responses/:indicatorId/improve-observation`)
     @RequireAssessmentPermission(mod, 'write')

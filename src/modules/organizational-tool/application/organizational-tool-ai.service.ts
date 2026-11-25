@@ -4,8 +4,6 @@ import { AssessmentLlmClientService } from '../../assessment-ai/application/asse
 import { EvaluationToolAiService } from '../../evaluation-tool/application/evaluation-tool-ai.service';
 import { ORGANIZATIONAL_AI_CONTEXT } from '../domain/organizational-tool.definition';
 
-// Asistencia de IA de la Herramienta Organizativa: solo aporta el contexto de
-// dominio; prompts, parsers anti-alucinación y llamadas viven en la base.
 @Injectable()
 export class OrganizationalToolAiService extends EvaluationToolAiService {
   constructor(

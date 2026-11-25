@@ -1,8 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 
-// Los exportes (PPTX/Excel) se generan en memoria y son costosos en CPU: un
-// semáforo acota cuántos se construyen a la vez y cuántos esperan en cola,
-// para que un lote de descargas no tumbe el proceso. Sin dependencias.
 const MAX_CONCURRENT = Math.max(
   1,
   Number(process.env.EXPORT_MAX_CONCURRENCY ?? 2),
@@ -19,7 +16,6 @@ function release() {
   if (next) next();
 }
 
-/** Ejecuta `task` cuando hay un cupo libre; rechaza si la cola está llena. */
 export async function withExportSlot<T>(task: () => Promise<T>): Promise<T> {
   if (running >= MAX_CONCURRENT) {
     if (waiting.length >= MAX_QUEUED) {
@@ -52,7 +48,6 @@ export async function withExportSlot<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Estado actual, para pruebas y diagnóstico. */
 export function exportLimiterStats() {
   return { running, waiting: waiting.length, maxConcurrent: MAX_CONCURRENT };
 }

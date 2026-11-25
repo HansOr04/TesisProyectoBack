@@ -19,7 +19,8 @@ medidas de cada una):
 El máximo fue **8,1 s**, con el proveedor de IA colgado: la espera está acotada a
 8 s y, si se agota, el reporte sale con los textos calculados de los datos.
 
-Para medir en la demo (solo lee y exporta; con una cuenta de prueba):
+Para medir en la demo (solo lee y exporta; con una cuenta de prueba). Opcionales:
+`REPETICIONES` (3) y `EVALUACIONES` por herramienta (1).
 
 ```bash
 API_URL=https://evaluartesis-5deec07f5fd8.herokuapp.com ORG=<proyecto> \
@@ -28,8 +29,18 @@ EMAIL=<correo> PASSWORD=<clave> node scripts/medir-reporte.mjs
 
 ## Guardado con 20 evaluadores a la vez (HU-68)
 
-`scripts/carga-guardado.mjs`; instrucciones en el propio archivo. Límite de
-CA-68.1: el 95 % de los guardados en menos de 1 segundo.
+`scripts/carga-guardado.mjs`. Límite de CA-68.1: el 95 % de los guardados en menos
+de 1 segundo. Escribe calificaciones de verdad: usar una evaluación de prueba.
+
+```bash
+API_URL=<servidor> ORG=<proyecto> EVALUACION_ID=<id> CUENTAS=<archivo> \
+node scripts/carga-guardado.mjs
+```
+
+`CUENTAS` tiene una línea por evaluador (`correo contraseña`). Con `EMAIL` y
+`PASSWORD` en su lugar, todos comparten una sesión. Opcionales: `HERRAMIENTA`
+(`organizational` o `capacity`), `USUARIOS` (20), `DURACION_S` (60) y `PAUSA_MS`
+(3000, la espera del guardado automático).
 
 | Entorno | Fecha | Inicios de sesión | Guardados | p95 |
 |---|---|---|---|---|

@@ -6,7 +6,6 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(60 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
 const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
@@ -162,7 +161,6 @@ describe('User management (e2e)', () => {
       .send({ isActive: false })
       .expect(200);
 
-    // El guard rechaza tokens de cuentas inactivas aunque el JWT siga vigente.
     await api()
       .get('/auth/me')
       .set('Authorization', `Bearer ${token}`)

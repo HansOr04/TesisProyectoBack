@@ -13,8 +13,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// UCA-04: calificación entera 1..10 + observación obligatoria por KPI (regla de
-// negocio transversal RF-03/04/05, doc 01 §1).
 export class KpiResponseDto {
   @IsString()
   @IsNotEmpty()
@@ -31,8 +29,6 @@ export class KpiResponseDto {
   @MaxLength(4000)
   observation: string;
 
-  // El evaluador puede marcar el KPI como "requiere atención" a mano, aunque
-  // el score sea alto (RF-03: no todo lo crítico se refleja en la nota).
   @IsOptional()
   @IsBoolean()
   manualCritical?: boolean;

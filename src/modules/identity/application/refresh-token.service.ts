@@ -4,20 +4,12 @@ import { createHash, randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 
 export interface IssuedRefreshToken {
-  /** Valor opaco que viaja en la cookie HttpOnly (nunca se persiste en claro). */
   token: string;
   expiresAt: Date;
 }
 
-// Dos pestañas comparten la cookie y pueden renovar a la vez: la segunda llega
-// con el token que la primera acaba de rotar. Durante este margen eso no se
-// toma por robo. Es corto para que una cookie robada siga sin servir después.
 export const ROTATION_GRACE_MS = 30 * 1000;
 
-// Refresh tokens rotatorios: cada uso emite uno nuevo y revoca el anterior.
-// Si alguien presenta un token ya rotado (robo de cookie), se revoca toda la
-// familia y la sesión legítima también cae — el usuario vuelve a iniciar
-// sesión, el atacante pierde el acceso.
 @Injectable()
 export class RefreshTokenService {
   private readonly ttlMs: number;
@@ -58,7 +50,6 @@ export class RefreshTokenService {
     return { token, expiresAt };
   }
 
-  /** Valida y rota: devuelve el usuario y el nuevo token. */
   async rotate(
     rawToken: string,
     userAgent?: string,
@@ -73,8 +64,6 @@ export class RefreshTokenService {
       throw new UnauthorizedException('Sesión expirada');
     }
 
-    // Revocar el token y emitir el siguiente van juntos: si dos pestañas llegan
-    // a la vez, solo una lo rota y la otra espera a que el nuevo ya exista.
     const issued = stored.revokedAt
       ? null
       : await this.prisma.$transaction(async (tx) => {
@@ -89,7 +78,6 @@ export class RefreshTokenService {
     if (issued) return { userId: stored.userId, issued };
 
     if (!(await this.isConcurrentRotation(stored.familyId, stored.revokedAt))) {
-      // Reuso de un token ya rotado: se revoca toda la familia.
       await this.revokeFamily(stored.familyId);
       throw new UnauthorizedException('Sesión inválida');
     }
@@ -99,11 +87,6 @@ export class RefreshTokenService {
     };
   }
 
-  /**
-   * El token se rotó hace un momento y la sesión sigue abierta. Cerrar sesión,
-   * desactivar la cuenta o detectar un robo revocan toda la familia: ahí ya no
-   * queda ninguno activo y el margen no la revive.
-   */
   private async isConcurrentRotation(
     familyId: string,
     revokedAt: Date | null,
@@ -124,7 +107,6 @@ export class RefreshTokenService {
     });
   }
 
-  /** Cierra la sesión en todas las pestañas que la comparten. */
   async revoke(rawToken: string): Promise<void> {
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: this.hash(rawToken) },
@@ -133,7 +115,6 @@ export class RefreshTokenService {
     if (stored) await this.revokeFamily(stored.familyId);
   }
 
-  /** Cierra todas las sesiones de un usuario (desactivación, baja). */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
@@ -141,7 +122,6 @@ export class RefreshTokenService {
     });
   }
 
-  /** Limpieza de tokens vencidos/revocados con más de 30 días. */
   async purgeExpired(): Promise<number> {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const result = await this.prisma.refreshToken.deleteMany({

@@ -7,8 +7,6 @@ export interface OAuthIdentity {
   name?: string;
 }
 
-// Un proveedor OAuth (Google hoy; GitHub/Microsoft mañana) solo tiene que
-// saber verificar un id_token y devolver la identidad — Strategy.
 export interface OAuthVerifierPort {
   readonly provider: string;
   readonly enabled: boolean;

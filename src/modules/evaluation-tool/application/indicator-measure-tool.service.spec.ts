@@ -131,8 +131,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
     );
   });
 
-  // ── DTO validation (UCA-04 business rules) ──────────────────────────────
-
   describe('ScoreKpiDto / KpiResponseDto validation', () => {
     it('accepts an integer score between 1 and 10 with a non-empty observation', async () => {
       const dto = plainToInstance(KpiResponseDto, {
@@ -169,8 +167,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
       expect(errors.some((e) => e.property === 'responses')).toBe(true);
     });
   });
-
-  // ── Estructura: versionado por inmutabilidad ─────────────────────────────
 
   describe('createSection', () => {
     it('creates directly on the active template when no evaluation references it', async () => {
@@ -334,8 +330,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
     });
   });
 
-  // ── Respuestas (UCA-04): coloreado automático y recálculo ───────────────
-
   function buildEvaluation(overrides: AnyRecord = {}) {
     return {
       id: 'e1',
@@ -457,7 +451,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
 
       const result = await service.getEvaluation(ORG, 'e1');
 
-      // (1*8 + 3*4) / (1+3) = 5
       expect(result.sectionScores[0].weightedAvg).toBe(5);
       expect(result.sectionScores[0].critical).toBe(true);
       expect(result.globalScore).toBe(5);
@@ -922,9 +915,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
           weight: 2,
         },
       ]);
-      // Prioridad de impacto = peso × (umbral - score): i4 = 2*(5-2) = 6,
-      // i2 = 3*(5-4) = 3 — i4 va primero pese a que i2 tiene menor peso de
-      // dimensión, porque su propio peso × brecha es mayor.
       expect(result.suggestions.map((s) => s.indicatorId)).toEqual([
         'i4',
         'i2',
@@ -1001,11 +991,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
   });
 
   describe('summaryExportPptx', () => {
-    // pptxgenjs internally uses a dynamic `import('node:fs')` when
-    // serializing, which Jest's CJS test environment can't resolve without
-    // --experimental-vm-modules. We exercise the real slide-building logic
-    // (data queries, addXxxSlide calls) and only stub the final binary
-    // serialization step, which is third-party code, not ours to test here.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PptxGenJSCtor = require('pptxgenjs');
     let writeSpy: jest.SpyInstance;
@@ -1014,8 +999,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
       writeSpy = jest
         .spyOn(PptxGenJSCtor.prototype, 'write')
         .mockResolvedValue(Buffer.from('fake-pptx-content'));
-      // La diapositiva de evolución consulta el historial de evaluaciones
-      // completadas del perfil; sin historial no se agrega.
       prisma.assessmentEvaluation.findMany.mockResolvedValue([]);
     });
 
@@ -1080,8 +1063,6 @@ describe('IndicatorMeasureToolService (via OrganizationalToolService)', () => {
       expect(result.data.length).toBeGreaterThan(0);
     });
   });
-
-  // ── RNF-01: 100% de los endpoints Assessment con guard de permiso ─────────────
 
   describe('IndicatorToolController — guard coverage', () => {
     it('decorates every HTTP route with @RequireAssessmentPermission', () => {

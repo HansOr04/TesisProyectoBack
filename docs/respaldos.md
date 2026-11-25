@@ -13,8 +13,7 @@ Todos los comandos necesitan la CLI de Heroku con sesión iniciada
 heroku pg:backups:schedule DATABASE_URL --at '03:00 America/Guayaquil' -a evaluartesis
 ```
 
-Se elige las 03:00 porque nadie usa la plataforma a esa hora y coincide con la
-purga diaria de la auditoría.
+Se elige las 03:00 porque nadie usa la plataforma a esa hora.
 
 Comprobar que quedó programado y sacar el primer respaldo sin esperar a la noche:
 
