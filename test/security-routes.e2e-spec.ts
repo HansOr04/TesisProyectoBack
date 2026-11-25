@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -13,7 +14,10 @@ const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
   password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
 };
-const PASSWORD = 'clave-de-prueba-e2e';
+// Contraseñas generadas en cada corrida.
+const newPassword = () => randomUUID();
+const PASSWORD = newPassword();
+const CHANGED_PASSWORD = newPassword();
 
 // Las únicas rutas sin sesión. Agregar una aquí es una decisión consciente.
 const PUBLIC_ROUTES = [
@@ -181,7 +185,7 @@ describe('Route security (e2e, HU-70)', () => {
     const path = `${users}/${victim.body.id}`;
 
     for (const change of [
-      { password: 'tomada-por-el-admin-a' },
+      { password: newPassword() },
       { isActive: false },
       { name: 'Otro nombre' },
     ]) {
@@ -210,14 +214,14 @@ describe('Route security (e2e, HU-70)', () => {
     await call(
       tokenA,
       { method: 'patch', path: `${users}/${own.body.id}` },
-      { password: `${PASSWORD}-2` },
+      { password: CHANGED_PASSWORD },
     ).expect(200);
   });
 
   it('losing superadmin or the membership takes effect at once, not when the token expires', async () => {
     const account = { where: { email: emails.superadmin } };
     await prisma.user.update({ ...account, data: { isSuperAdmin: true } });
-    const token = await login(emails.superadmin, `${PASSWORD}-2`);
+    const token = await login(emails.superadmin, CHANGED_PASSWORD);
     const organisations: Route = { method: 'get', path: '/organisations' };
     const users: Route = {
       method: 'get',
