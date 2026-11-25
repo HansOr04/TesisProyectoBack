@@ -28,15 +28,12 @@ export interface OrganisationView {
 export interface CreateOrganisationInput {
   id: string;
   name: string;
-  /** Administrador inicial; si se omite, el superadmin que la crea queda como miembro. */
   adminEmail?: string;
   adminName?: string;
   adminPassword?: string;
 }
 
-/** El identificador viaja en las URLs (`/:org/assessments/...`): slug estricto. */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
-/** Reservados por rutas globales existentes, para que nunca colisionen. */
 const RESERVED = new Set([
   'auth',
   'assessments',
@@ -45,14 +42,6 @@ const RESERVED = new Set([
   'api',
 ]);
 
-/**
- * Alta y mantenimiento de organizaciones (inquilinos) desde la API, reservado
- * al superadministrador global. Cada superadministrador ve y administra solo
- * los proyectos que creó. Crear una organización no es insertar una
- * fila: hay que dejarla operativa (plantillas, parámetros de riesgo,
- * administrador con su rol), y eso es lo que hace `create` en una sola
- * transacción lógica.
- */
 @Injectable()
 export class OrganisationManagementService {
   constructor(
@@ -63,7 +52,6 @@ export class OrganisationManagementService {
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasherPort,
   ) {}
 
-  /** Proyectos que creó este superadministrador: solo esos administra. */
   async list(actorId: string): Promise<OrganisationView[]> {
     const rows = await this.prisma.organisation.findMany({
       where: { deletedAt: null, createdById: actorId },
@@ -125,16 +113,12 @@ export class OrganisationManagementService {
       throw new ConflictException(`Ya existe una organización con id "${id}"`);
     }
 
-    // El administrador se valida antes de crear nada: si sus datos no
-    // sirven, no debe quedar un proyecto a medio configurar.
     await this.assertAdminInput(input, actor);
 
     const organisation = await this.prisma.organisation.create({
       data: { id, name: input.name.trim(), createdById: actor.id },
     });
 
-    // Sin plantillas no se puede iniciar ninguna evaluación: se aprovisiona
-    // antes de devolver, para que la organización nazca utilizable.
     const templates = await this.provisioning.provision(organisation.id);
 
     const admin = await this.attachAdmin(organisation.id, input, actor);
@@ -158,7 +142,6 @@ export class OrganisationManagementService {
     };
   }
 
-  /** Datos editables del alta. El identificador no cambia: vive en las URLs. */
   async update(
     id: string,
     input: { name: string },
@@ -186,11 +169,6 @@ export class OrganisationManagementService {
     return this.get(id, actor.id);
   }
 
-  /**
-   * Vuelve a aplicar las plantillas base sobre una organización existente
-   * (útil si se creó antes de que existiera el aprovisionamiento o si una
-   * plantilla se borró por error). No toca evaluaciones ni respuestas.
-   */
   async reprovision(
     id: string,
     actor: { id: string },
@@ -211,10 +189,6 @@ export class OrganisationManagementService {
     return templates;
   }
 
-  /**
-   * Usuarios activos de la plataforma, para asignarlos a un proyecto sin
-   * tener que volver a crearlos. Solo datos de contacto, nunca credenciales.
-   */
   async assignableUsers(search?: string) {
     const term = search?.trim();
     return this.prisma.user.findMany({
@@ -236,10 +210,6 @@ export class OrganisationManagementService {
     });
   }
 
-  /**
-   * Un administrador nuevo necesita contraseña; una cuenta existente conserva
-   * la suya, así que crear un proyecto no sirve para cambiársela a otra persona.
-   */
   private async assertAdminInput(
     input: CreateOrganisationInput,
     actor: { id: string; email: string },
@@ -260,7 +230,6 @@ export class OrganisationManagementService {
     }
   }
 
-  /** Crea o reutiliza al administrador inicial y le da el rol en la organización. */
   private async attachAdmin(
     organisation: string,
     input: CreateOrganisationInput,
@@ -275,7 +244,6 @@ export class OrganisationManagementService {
         data: {
           email,
           name: input.adminName?.trim() || email,
-          // Validada en assertAdminInput antes de crear el proyecto.
           passwordHash: await this.hasher.hash(input.adminPassword ?? ''),
         },
       });

@@ -28,7 +28,6 @@ async function readWorkbook(body: Buffer): Promise<ExcelJS.Workbook> {
   return book;
 }
 
-/** Texto de todas las celdas de todas las hojas, una fila por línea. */
 function workbookText(book: ExcelJS.Workbook): string {
   const lines: string[] = [];
   book.eachSheet((sheet) =>
@@ -60,9 +59,6 @@ async function slideText(buffer: Buffer) {
   return { count: slides.length, text: texts.join(' ') };
 }
 
-// HU-52: plan de acción y reportes. CA-52.1 medidas, su estado y el rechazo
-// para indicadores no críticos; CA-52.2 presentación con cada alcance y matriz
-// en hoja de cálculo.
 describe('Measures and report exports (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -75,7 +71,6 @@ describe('Measures and report exports (e2e)', () => {
   const http = () => request(app.getHttpServer());
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
 
-  // Las notas alternan 3 y 8: los indicadores pares quedan críticos.
   const noteOf = (_: Indicator, i: number) => (i % 2 === 0 ? 3 : 8);
 
   async function completedEvaluation(tool: Tool, profileId: string) {
@@ -107,8 +102,6 @@ describe('Measures and report exports (e2e)', () => {
     orgEvalA = await completedEvaluation('organizational', a);
     riskEvalA = await completedEvaluation('risk', a);
     const orgEvalB = await completedEvaluation('organizational', b);
-    // La organización B tiene una medida propia para que aparezca en el
-    // cronograma del proyecto completo.
     await auth(
       http()
         .post(
@@ -240,9 +233,6 @@ describe('Measures and report exports (e2e)', () => {
     });
   });
 
-  // HU-57: plan de acción consolidado de una organización, pedido en el
-  // piloto. Corre después de CA-52.1, que deja medidas de la herramienta
-  // organizativa y de riesgos en la organización A.
   describe('consolidated action plan of one organisation', () => {
     it('lists the measures of every tool of that organisation and nothing from others', async () => {
       const res = await auth(
@@ -309,7 +299,6 @@ describe('Measures and report exports (e2e)', () => {
         expect(res.headers['content-type']).toContain(PPTX);
         const { count, text } = await slideText(res.body);
         expect(count).toBeGreaterThan(1);
-        // Solo el cronograma de todo el proyecto incluye a la otra organización.
         if (ganttScope === 'project') expect(text).toContain(nameB);
         else expect(text).not.toContain(nameB);
       },

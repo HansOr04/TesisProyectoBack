@@ -1,16 +1,3 @@
-// Tiempo de generación del reporte en presentación (HU-69, RNF-04).
-//
-// Exporta el PPTX de una evaluación completa con alcance de proyecto y mide
-// cuánto tarda. CA-69.1: menos de 10 segundos. La primera exportación redacta
-// los textos con IA; las siguientes los toman de la caché.
-//
-// Uso (sin dependencias, Node 18 o superior):
-//   API_URL=https://<servidor> ORG=<proyecto> EMAIL=<correo> PASSWORD=<clave> \
-//   node scripts/medir-reporte.mjs
-//
-// Variables opcionales: REPETICIONES (3), EVALUACIONES por herramienta (1).
-// Solo lee y exporta: no cambia ninguna evaluación.
-
 const env = process.env;
 const API = (env.API_URL ?? 'http://localhost:3100').replace(/\/$/, '');
 const ORG = env.ORG ?? 'demo';

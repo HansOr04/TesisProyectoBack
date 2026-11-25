@@ -3,10 +3,6 @@ import { NextFunction, Request, Response } from 'express';
 import { AUTH_CONTEXT_KEY } from '../../../modules/identity/domain/auth-context';
 import { StructuredLoggerService } from '../logging/structured-logger.service';
 
-/**
- * Una línea por petición: ruta, estado, duración y usuario. Sin parámetros de
- * consulta, cuerpo ni cabeceras, que pueden llevar datos de las organizaciones.
- */
 @Injectable()
 export class RequestLogMiddleware implements NestMiddleware {
   constructor(private readonly logger: StructuredLoggerService) {

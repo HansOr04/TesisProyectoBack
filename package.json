@@ -18,6 +18,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test,prisma}/**/*.ts\"",
+    "comentarios": "node scripts/comentarios.cjs",
     "lint:fix": "eslint \"{src,test,prisma}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\"",
     "test": "jest",

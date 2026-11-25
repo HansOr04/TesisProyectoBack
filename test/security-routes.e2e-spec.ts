@@ -7,19 +7,15 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(120 * 1000);
 
-// Revisión OWASP de las rutas (HU-70, CA-70.1). Requiere la BD migrada y
-// sembrada. Ver docs/seguridad.md.
 const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
   password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
 };
-// Contraseñas generadas en cada corrida.
 const newPassword = (): string => randomUUID();
 const PASSWORD = newPassword();
 const CHANGED_PASSWORD = newPassword();
 
-// Las únicas rutas sin sesión. Agregar una aquí es una decisión consciente.
 const PUBLIC_ROUTES = [
   'GET /health',
   'POST /auth/login',
@@ -193,14 +189,12 @@ describe('Route security (e2e, HU-70)', () => {
     }
     await login(emails.adminB);
 
-    // El rol dentro de su proyecto sí es suyo, aunque reenvíe el mismo nombre.
     await call(
       tokenA,
       { method: 'patch', path },
       { name: 'Administrador', roleCode: 'assessment_evaluator' },
     ).expect(200);
 
-    // Y una cuenta que solo está en su proyecto la sigue administrando.
     const own = await call(
       tokenA,
       { method: 'post', path: users },
@@ -242,7 +236,6 @@ describe('Route security (e2e, HU-70)', () => {
     await call(token, users).expect(403);
   });
 
-  // HU-72: la vigilancia lee esto sin sesión; no debe contar nada más.
   it('health exposes only the status and the error count', async () => {
     const { body } = await api().get('/health').expect(200);
     expect(body).toEqual({

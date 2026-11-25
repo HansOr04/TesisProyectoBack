@@ -64,7 +64,5 @@ Respaldos diarios de la base y cómo restaurarlos: [`docs/respaldos.md`](docs/re
 
 ## Documentación
 
-- [Manual técnico](docs/manual-tecnico.md): arquitectura, instalación, despliegue y respaldos
-- [Manual de usuario](https://github.com/HansOr04/TesisFrontend/blob/main/docs/manual-usuario.md)
-- [Lista de verificación posterior al despliegue](docs/lista-verificacion.md)
-- [Puesta en marcha](docs/puesta-en-marcha.md)
+Todo está en **[docs/](docs/README.md)**: arquitectura, base de datos, API, reglas, IA,
+cómo expandir, decisiones, referencia del código, despliegue y operación.

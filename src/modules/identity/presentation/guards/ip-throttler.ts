@@ -1,7 +1,6 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ThrottlerOptions } from '@nestjs/throttler';
 
-/** Tope por IP de las rutas de /auth, además de su límite por cuenta o sesión. */
 export const IP_THROTTLER = 'ip';
 export const AUTH_LIMIT_PER_IP = 300;
 

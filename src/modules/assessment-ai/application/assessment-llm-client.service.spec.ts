@@ -110,7 +110,6 @@ describe('AssessmentLlmClientService circuit breaker', () => {
       await expect(client.complete('sys', 'user', 100, 0.1)).rejects.toThrow();
     }
 
-    // Circuit now open — should reject WITHOUT calling the provider again.
     const callCountBeforeOpenCheck = (httpService.post as jest.Mock).mock.calls
       .length;
     await expect(client.complete('sys', 'user', 100, 0.1)).rejects.toThrow(

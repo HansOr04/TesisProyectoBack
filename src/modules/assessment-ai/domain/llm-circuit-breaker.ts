@@ -6,11 +6,6 @@ interface BreakerState {
   openUntil: number | null;
 }
 
-// LLM10 (doc 03/06): tras 5 fallos consecutivos (429/5xx) de un proveedor de
-// IA se deja de llamarlo por 5 minutos en vez de seguir intentando y acumular
-// costo/latencia contra un proveedor caído. Estado en memoria por instancia
-// de proceso — cada servicio de IA (Organizativa/Capacidades/Riesgos) mantiene su propia
-// instancia, ya que cada uno puede apuntar a un proveedor distinto.
 export class LlmCircuitBreaker {
   private readonly states = new Map<string, BreakerState>();
 

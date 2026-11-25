@@ -21,11 +21,6 @@ import {
   UpdateOrganisationDto,
 } from './dto/organisation.dto';
 
-/**
- * Administración de organizaciones (inquilinos). Son rutas globales, sin
- * `:org`, así que usan el guard de superadministrador en lugar del de
- * permisos por organización.
- */
 @ApiTags('Organizaciones')
 @ApiBearerAuth()
 @Controller('organisations')
@@ -50,7 +45,6 @@ export class OrganisationManagementController {
     return this.organisations.list(actor.id);
   }
 
-  /** Usuarios ya creados que se pueden asignar a un proyecto. */
   @Get('assignable-users')
   @RequireGlobalSuperAdmin()
   assignableUsers(@Query('search') search?: string) {
@@ -74,7 +68,6 @@ export class OrganisationManagementController {
     return this.organisations.update(id, dto, { id: actor.id });
   }
 
-  /** Reaplica las plantillas base sobre una organización existente. */
   @Post(':id/provision')
   @RequireGlobalSuperAdmin()
   async reprovision(@Param('id') id: string) {

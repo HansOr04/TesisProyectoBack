@@ -13,7 +13,6 @@ export interface ActivityLogFilter extends PaginationQueryDto {
   to?: string;
 }
 
-// Consulta paginada de la auditoría de una organización (solo administradores).
 @Injectable()
 export class ActivityLogQueryService {
   constructor(private readonly prisma: PrismaService) {}

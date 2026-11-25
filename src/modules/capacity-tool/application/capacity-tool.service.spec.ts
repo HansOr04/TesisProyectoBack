@@ -14,9 +14,6 @@ import { CapacityToolService } from './capacity-tool.service';
 
 type AnyRecord = Record<string, any>;
 
-// El flujo completo se prueba una sola vez en
-// evaluation-tool/application/indicator-measure-tool.service.spec.ts; acá solo
-// se verifica que la Herramienta de Capacidades parametriza bien el genérico.
 describe('CapacityToolService (definición de la herramienta)', () => {
   let prisma: AnyRecord;
   let service: CapacityToolService;

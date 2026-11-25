@@ -17,8 +17,6 @@ import { isValidContactPhone } from '../../domain/contact-phone';
 export const CONTACT_PHONE_MESSAGE =
   'contactPhone must be "+<dial code> <national number>" with the digits of that country (e.g. 9 for Ecuador, 10 for Colombia)';
 
-// Prefijo de país + número nacional con los dígitos de ese país, igual al
-// formato que arma el asistente del frontend (`+<dialCode> <número>`).
 export function IsContactPhone(options?: ValidationOptions) {
   return ValidateBy(
     {
@@ -55,7 +53,6 @@ export class CreateAssessmentProfileDto {
   @MaxLength(255)
   type: AssessmentProfileType;
 
-  // Solo aplica cuando type = "ASSOCIATION"
   @IsOptional()
   @IsIn(ASSESSMENT_ASSOCIATION_LEVELS)
   associationLevel?: AssessmentAssociationLevel;
@@ -125,12 +122,10 @@ export class CreateAssessmentProfileDto {
   @MaxLength(64)
   evaluatorId?: string;
 
-  // Excluye este perfil de la vista cross-organización del Administrador (RF-08)
   @IsOptional()
   @IsBoolean()
   confidential?: boolean;
 
-  // Solo aplica si el perfil padre es type="ASSOCIATION" y associationLevel="LEVEL_2"
   @IsOptional()
   @IsString()
   @MaxLength(64)

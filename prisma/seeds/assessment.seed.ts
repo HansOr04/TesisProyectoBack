@@ -8,10 +8,6 @@ import {
 
 let prisma: PrismaClient;
 
-// ==========================================
-// F2-B02 — Modules, permissions, system roles
-// ==========================================
-
 const ASSESSMENT_MODULES = [
   { code: 'assessment-core', name: 'Assessment Core' },
   { code: 'organizational-tool', name: 'Assessment Organizational' },
@@ -117,9 +113,6 @@ async function seedAssessmentRoles(
 
     roleIds.set(code, role.id);
 
-    // Rebuild permission set every run so a template change (adding a module/perm)
-    // is reflected without leaving stale grants behind — safe because these are
-    // system role templates, not org-specific customisations.
     await prisma.authRolePermission.deleteMany({ where: { roleId: role.id } });
 
     const permIds = def.permissions
@@ -141,10 +134,6 @@ async function seedAssessmentRoles(
 
   return roleIds;
 }
-
-// ==========================================
-// F1-B04 — Assessment templates (Organizativa/Capacidades/Riesgos) for the demo organisation
-// ==========================================
 
 async function seedAssessmentTemplate(
   organisation: string,
@@ -181,7 +170,6 @@ async function seedAssessmentTemplate(
     },
   });
 
-  // Parámetros de riesgo por país (configurables luego desde administración).
   for (const [country, params] of Object.entries(
     seedTemplate.countryRiskParams ?? {},
   )) {
@@ -274,13 +262,8 @@ async function seedAssessmentTemplates(organisation: string) {
   }
 }
 
-// ==========================================
-// Main
-// ==========================================
-
 export interface AssessmentSeedOptions {
   organisation: string;
-  /** userId → roleCode a asignar en la organización (p.ej. admin/evaluador demo). */
   roleAssignments?: Record<string, string>;
 }
 

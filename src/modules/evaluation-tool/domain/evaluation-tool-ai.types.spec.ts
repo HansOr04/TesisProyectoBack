@@ -46,8 +46,8 @@ describe('parseAiMeasureSuggestions (anti-hallucination guard)', () => {
 
   it('drops malformed entries missing required fields', () => {
     const raw = JSON.stringify([
-      { indicatorId: 'i1', name: 'n1' }, // missing description
-      { indicatorId: 'i2', description: 'd2' }, // missing name
+      { indicatorId: 'i1', name: 'n1' },
+      { indicatorId: 'i2', description: 'd2' },
     ]);
 
     const result = parseAiMeasureSuggestions(raw, ['i1', 'i2']);
@@ -104,10 +104,7 @@ describe('parseAiInconsistencyFindings (anti-hallucination guard)', () => {
   });
 
   it('drops malformed entries missing required fields', () => {
-    const raw = JSON.stringify([
-      { indicatorIds: [] }, // empty indicatorIds
-      { description: 'd2' }, // missing indicatorIds
-    ]);
+    const raw = JSON.stringify([{ indicatorIds: [] }, { description: 'd2' }]);
 
     const result = parseAiInconsistencyFindings(raw, ['i1']);
 

@@ -7,8 +7,6 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// KPI dentro de una sección de la plantilla. `code` debe ser estable para
-// paridad con el instrumento original (p.ej. "1.3").
 export class CreateAssessmentIndicatorDto {
   @IsString()
   @IsNotEmpty()

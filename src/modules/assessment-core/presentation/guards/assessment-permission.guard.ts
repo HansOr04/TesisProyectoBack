@@ -11,13 +11,6 @@ import { RequestContextService } from '../../../identity/application/request-con
 
 export const REQUIRE_ASSESSMENT_PERMISSION_KEY = 'requireAssessmentPermission';
 
-/**
- * The shared PermissionGuard now authorizes purely from JWT claims against a
- * static per-role catalog (CLAIM_ROLE_PERMISSION_CATALOG) — it no longer
- * queries AuthRole/AuthUserRole. assessment_admin/assessment_evaluator are assigned via
- * RF-01 as AuthUserRole rows and aren't in that static catalog, so Assessment
- * routes keep authorizing against the database directly instead.
- */
 export const RequireAssessmentPermission = (
   moduleCode: string,
   action: string,

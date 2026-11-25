@@ -3,7 +3,12 @@
 Para el equipo que mantenga la plataforma: cómo está hecha, cómo se instala en
 local, cómo se despliega y cómo se restaura un respaldo.
 
+El resto de la documentación está en el [índice](README.md).
+
 ## 1. Arquitectura
+
+Resumen; el detalle está en [arquitectura.md](arquitectura.md) y
+[base-de-datos.md](base-de-datos.md).
 
 | Parte | Tecnología | Repositorio | Dónde corre |
 |---|---|---|---|

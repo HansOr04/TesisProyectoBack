@@ -21,7 +21,6 @@ import {
   RequireAssessmentPermission,
 } from '../guards/assessment-permission.guard';
 
-// RF-07/F6-B01/F6-B02: panel consolidado multi-herramienta.
 @ApiTags('Panel consolidado')
 @ApiBearerAuth()
 @Controller()

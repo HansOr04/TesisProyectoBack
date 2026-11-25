@@ -49,7 +49,6 @@ export interface RiskCountryParam {
 }
 
 export interface RiskRepository {
-  /** Umbral configurado para el país, o null si no hay override. */
   findCountryThreshold(
     organisation: string,
     country: string,
@@ -63,7 +62,6 @@ export interface RiskRepository {
   ): Promise<RiskCountryParam>;
   deleteCountryParam(organisation: string, country: string): Promise<void>;
 
-  /** Respuestas + riesgos clasificados en una sola transacción. */
   upsertResponsesWithRisks(
     evaluationId: string,
     responses: RiskResponseInput[],
@@ -71,7 +69,6 @@ export interface RiskRepository {
     criticalThreshold: number,
   ): Promise<void>;
   listByEvaluation(evaluationId: string): Promise<RiskWithMeasures[]>;
-  /** Riesgos NON_NEGLIGIBLE sin medida, por evaluación, para varias evaluaciones. */
   countUnmitigatedByEvaluations(
     evaluationIds: string[],
   ): Promise<Map<string, number>>;

@@ -2,7 +2,6 @@ import { OrganizationalStrategy } from '../../assessment-core/domain/scoring.eng
 import { EvaluationToolDefinition } from '../../evaluation-tool/domain/evaluation-tool.definition';
 import { AiDomainContext } from '../../evaluation-tool/application/evaluation-tool-ai.service';
 
-// Herramienta Organizativa: diagnóstico de fortalecimiento organizativo por dimensiones.
 export const ORGANIZATIONAL_TOOL_DEFINITION: EvaluationToolDefinition = {
   code: 'ORGANIZATIONAL',
   slug: 'organizational',
@@ -15,7 +14,6 @@ export const ORGANIZATIONAL_TOOL_DEFINITION: EvaluationToolDefinition = {
   report: {
     subtitle: 'Diagnóstico de fortalecimiento organizativo',
     scoreLevelPrefix: 'Capacidad',
-    // Mismo color que la herramienta en la aplicación.
     accentColor: '196AC8',
   },
   strategy: new OrganizationalStrategy(),

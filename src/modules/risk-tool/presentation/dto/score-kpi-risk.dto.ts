@@ -13,11 +13,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// RF-05: calificación entera 1..10 + observación obligatoria por KPI (misma regla
-// transversal que Organizativa/Capacidades), más la descripción de riesgo obligatoria y el tipo de
-// riesgo opcional que exige la Herramienta de Riesgos (doc 03 §4: "igual que Organizational más
-// riskDescription (obligatoria) y riskType"). El servicio clasifica el riesgo y
-// upserta AssessmentRisk a partir de estos dos campos — no se persisten en AssessmentResponse.
 export class KpiResponseRiskDto {
   @IsString()
   @IsNotEmpty()
@@ -44,8 +39,6 @@ export class KpiResponseRiskDto {
   @MaxLength(200)
   riskType?: string;
 
-  // El evaluador puede marcar el KPI como "requiere atención" a mano, aunque
-  // el score sea alto.
   @IsOptional()
   @IsBoolean()
   manualCritical?: boolean;

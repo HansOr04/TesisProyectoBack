@@ -26,7 +26,6 @@ describe('AssessmentSessionGateway', () => {
     organisation: { count: jest.Mock };
     user: { findUnique: jest.Mock };
   };
-  /** Cuenta tal como está en la base cuando el socket pide entrar a la sala. */
   const account = (
     organisations: string[],
     overrides: Partial<{ isSuperAdmin: boolean; isActive: boolean }> = {},

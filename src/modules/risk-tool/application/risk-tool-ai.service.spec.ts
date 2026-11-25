@@ -38,10 +38,7 @@ describe('parseAiRiskMeasureSuggestions (anti-hallucination guard)', () => {
   });
 
   it('drops malformed entries missing required fields', () => {
-    const raw = JSON.stringify([
-      { indicatorId: 'i1' }, // missing description
-      { description: 'd2' }, // missing indicatorId
-    ]);
+    const raw = JSON.stringify([{ indicatorId: 'i1' }, { description: 'd2' }]);
 
     const result = parseAiRiskMeasureSuggestions(raw, ['i1', 'i2']);
 

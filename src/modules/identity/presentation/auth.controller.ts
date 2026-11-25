@@ -24,13 +24,8 @@ import { AUTH_LIMIT_PER_IP, IP_THROTTLER } from './guards/ip-throttler';
 import { LoginDto, OAuthLoginDto } from './dto/login.dto';
 
 export const REFRESH_COOKIE = 'assessment_refresh';
-// Solo se envía a /auth/*: el resto de la API nunca ve la cookie.
 const REFRESH_COOKIE_PATH = '/auth';
 
-// La web llega a /auth a través de Vercel (cookie propia, HU-71): varias
-// personas comparten la IP, así que el inicio de sesión cuenta por correo y la
-// renovación por sesión. El tope por IP de abajo frena a quien prueba muchas
-// cuentas y deja entrar a la vez a todo un taller (HU-68).
 const LOGIN_LIMIT_PER_ACCOUNT = 10;
 const LOGIN_LIMIT_PER_IP = 120;
 const REFRESH_LIMIT_PER_SESSION = 30;
@@ -50,8 +45,6 @@ const refreshTracker = (req: Record<string, any>): string => {
     : `refresh:${req.ip}`;
 };
 
-// Sin cookie no hay sesión que renovar (cada visita a la web pasa por aquí) y
-// ni siquiera se consulta la base: queda solo el tope por IP.
 const refreshLimit = (context: ExecutionContext): number =>
   context.switchToHttp().getRequest().cookies?.[REFRESH_COOKIE]
     ? REFRESH_LIMIT_PER_SESSION
@@ -72,11 +65,6 @@ export class AuthController {
     this.secureCookies = config.get('NODE_ENV') === 'production';
   }
 
-  // El refresh token viaja en cookie HttpOnly (inaccesible desde JS) y el
-  // token de acceso, corto, en el cuerpo — el frontend lo guarda en memoria.
-  // En producción la web llama a /auth en su propio dominio (Vercel lo reenvía
-  // aquí): la cookie es propia y los navegadores que bloquean las de terceros
-  // la aceptan. SameSite=None cubre a quien todavía llame directo a Heroku.
   private get cookieOptions(): CookieOptions {
     return {
       httpOnly: true,
@@ -140,7 +128,6 @@ export class AuthController {
     return this.issue(res, session);
   }
 
-  // Renueva el token de acceso rotando el refresh token de la cookie.
   @Post('refresh')
   @Public()
   @HttpCode(200)
@@ -181,8 +168,6 @@ export class AuthController {
     return { password: true, oauth: this.authService.oauthProviders() };
   }
 
-  // Perfil + roles Assessment por organización, para que el frontend sepa qué
-  // menús mostrar sin adivinar.
   @Get('me')
   @RequireAuthenticated()
   async me() {

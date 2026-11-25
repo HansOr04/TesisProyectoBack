@@ -9,9 +9,6 @@ import { Request, Response } from 'express';
 import { ServerErrorMonitor } from '../logging/server-error-monitor.service';
 import { StructuredLoggerService } from '../logging/structured-logger.service';
 
-// Respuesta de error uniforme: statusCode, message, requestId y timestamp.
-// Los errores no controlados (500) se registran con stack y, en producción,
-// no exponen detalles internos al cliente.
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   constructor(
@@ -38,8 +35,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
             ? 'Error interno del servidor'
             : (exception as Error)?.message));
 
-    // Los 502–504 son de un servicio externo (la IA) o de saturación y ya
-    // se responden con un mensaje: se registran, pero no son fallas propias.
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) this.errors.record();
     if (status >= 500) {
       this.logger.error('Unhandled exception', exception, {

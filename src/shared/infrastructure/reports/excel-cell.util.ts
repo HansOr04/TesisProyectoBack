@@ -1,7 +1,6 @@
 import { withExportSlot } from './export-limiter';
 import * as ExcelJS from 'exceljs';
 
-/** Excel hard limit per cell (inclusive). */
 export const EXCEL_CELL_MAX_LENGTH = 32767;
 
 const EXCEL_TRUNCATE_MARKER = '…[truncated]';
@@ -11,7 +10,6 @@ const EXCEL_CELL_SAFE_LENGTH =
 
 const EXCEL_OMITTED_MARKER = '…[omitted — exceeds Excel limit]';
 
-/** Truncate a text string to fit Excel's cell limit (text columns only). */
 export function clampExcelText(value: string, columnId?: string): string {
   if (value.length <= EXCEL_CELL_MAX_LENGTH) return value;
   console.warn(
@@ -22,11 +20,6 @@ export function clampExcelText(value: string, columnId?: string): string {
   return value.slice(0, EXCEL_CELL_SAFE_LENGTH) + EXCEL_TRUNCATE_MARKER;
 }
 
-/**
- * Prepare any cell value for Excel write.
- * Truncation applies to text strings only; numbers/booleans pass through unchanged.
- * Non-text values that would exceed the limit are replaced with a short placeholder.
- */
 export function sanitizeForExcelCell(
   value: unknown,
   columnId?: string,
@@ -46,20 +39,13 @@ export function sanitizeForExcelCell(
   return EXCEL_OMITTED_MARKER;
 }
 
-/** @deprecated Use sanitizeForExcelCell */
 export const clampForExcelCell = sanitizeForExcelCell;
-
-// ── Hojas con formato (ExcelJS) ──────────────────────────────────────────
-// Los reportes que se entregan a las organizaciones se generan con ExcelJS:
-// título, encabezado con color, anchos de columna, texto ajustado, filtros y
-// la fila de encabezado inmovilizada.
 
 export type ExcelColumnKind = 'text' | 'number' | 'score' | 'percent' | 'date';
 
 export interface ExcelColumn {
   header: string;
   key: string;
-  /** Ancho en caracteres. */
   width: number;
   kind?: ExcelColumnKind;
 }
@@ -67,7 +53,6 @@ export interface ExcelColumn {
 export interface ExcelSheetSpec {
   name: string;
   title: string;
-  /** Línea de contexto bajo el título (organización, fecha…). */
   subtitle?: string;
   columns: ExcelColumn[];
   rows: Record<string, unknown>[];
@@ -84,7 +69,6 @@ function scoreFontColor(score: number): string {
   return 'FF2E7D32';
 }
 
-/** Nombre de hoja válido para Excel: máx. 31 caracteres y sin : \ / ? * [ ] */
 function safeSheetName(name: string): string {
   return name.replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
 }

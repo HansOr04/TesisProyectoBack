@@ -9,9 +9,6 @@ import { RiskToolAiService } from './application/risk-tool-ai.service';
 import { RiskToolService } from './application/risk-tool.service';
 import { RiskToolController } from './presentation/controllers/risk-tool.controller';
 
-// Herramienta de Riesgos. Reutiliza del núcleo: auditoría, aplicabilidad,
-// alcance de acceso y guards; del módulo de IA: el cliente LLM compartido;
-// del módulo de sesión: el gateway de tiempo real (misma instancia).
 @Module({
   imports: [
     AssessmentCoreModule,

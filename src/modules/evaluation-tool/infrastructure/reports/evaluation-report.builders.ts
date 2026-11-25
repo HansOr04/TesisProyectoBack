@@ -53,7 +53,6 @@ export function scoreLevelLabel(score: number): string {
   return 'Alto';
 }
 
-/** "Capacidad" + nivel con concordancia: "Capacidad alta", "Capacidad media"… */
 export function scoreLevelPhrase(
   definition: EvaluationToolDefinition,
   score: number,
@@ -95,7 +94,6 @@ export function evaluationSubtitle(
     .join(' · ');
 }
 
-/** Sección a la que pertenece cada indicador de la plantilla. */
 export function sectionByIndicator(
   evaluation: EvaluationWithStructure,
 ): Map<string, { number: number; name: string }> {
@@ -107,10 +105,6 @@ export function sectionByIndicator(
   return map;
 }
 
-/**
- * Resumen por sección y matriz completa de KPI calificados, en dos hojas con
- * encabezados en español, anchos de columna y filtros.
- */
 export async function buildSummaryExcel(
   definition: EvaluationToolDefinition,
   evaluation: EvaluationWithStructure,
@@ -210,14 +204,9 @@ export interface SummaryPptxInput {
     measuresDone: number;
   }[];
   narrative: string;
-  /** La síntesis la escribió (o eligió) el usuario: va tal cual al cierre. */
   customNarrative?: boolean;
   insights: AiReportInsights | null;
   swot?: AiSwot | null;
-  /**
-   * Plan consolidado que reemplaza al Gantt propio de la herramienta cuando
-   * al exportar se pide un alcance mayor (la organización o el proyecto).
-   */
   consolidatedGantt?: {
     title: string;
     nameHeader?: string;
@@ -277,10 +266,6 @@ function shortObservation(text: string | null | undefined, max = 110) {
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
 }
 
-/**
- * Fortalezas y brechas de una sección a partir de sus KPI, cuando la IA no
- * las dio: los mejor calificados (nivel alto) y los peor calificados.
- */
 function sectionPointsFromData(
   responses: EvaluationWithStructure['responses'],
 ): { strengths: InsightPoint[]; gaps: InsightPoint[] } {
@@ -307,7 +292,6 @@ function sectionPointsFromData(
   };
 }
 
-/** Lectura general sin IA: las secciones con mejor y peor resultado. */
 function generalPointsFromData(
   evaluation: EvaluationWithStructure,
   sectionScores: SectionScoreResult[],
@@ -340,11 +324,6 @@ function generalPointsFromData(
   };
 }
 
-/**
- * Láminas de resultados comunes a todas las herramientas: resultados
- * globales en barras, lectura ejecutiva, una lámina por sección con su
- * semáforo y los hallazgos clave.
- */
 export function addResultSlides(
   pptx: Pptx,
   definition: EvaluationToolDefinition,
@@ -366,8 +345,6 @@ export function addResultSlides(
   const best = sorted[0];
   const worst = sorted[sorted.length - 1];
 
-  // Segunda lámina: el resultado global y la síntesis (la que se escribió en
-  // la aplicación o, si no, la narrativa automática con los porcentajes).
   addExecutiveSummarySlide(pptx, {
     kicker: definition.displayName,
     title: 'Resumen ejecutivo',
@@ -422,7 +399,6 @@ export function addResultSlides(
   });
 
   const fromData = generalPointsFromData(evaluation, sectionScores);
-  // La síntesis ya va en el resumen ejecutivo; aquí va la lectura de cierre.
   const closing =
     insights?.conclusion ||
     (best && worst && best !== worst
@@ -482,7 +458,6 @@ export function addResultSlides(
   }
 }
 
-/** FODA y recomendaciones, al cierre del reporte. */
 export function addClosingSlides(
   pptx: Pptx,
   evaluation: EvaluationWithStructure,
@@ -553,7 +528,6 @@ export function planStatusCell(measures: Array<{ status: string }>): TableCell {
   return { ...PLAN_STATUS[key], bold: true };
 }
 
-/** Celda del resultado de un KPI en porcentaje, con su color de nivel. */
 export function scoreCell(score: number | undefined): TableCell {
   return score === undefined
     ? { text: '—', align: 'center' }
@@ -565,11 +539,6 @@ export function scoreCell(score: number | undefined): TableCell {
       };
 }
 
-/**
- * Reporte en diapositivas: portada, resultados globales, lectura ejecutiva,
- * una lámina por sección, hallazgos, KPI críticos, resumen y cronograma del
- * plan de acción, evolución, FODA y recomendaciones.
- */
 export async function buildSummaryPptx(
   definition: EvaluationToolDefinition,
   input: SummaryPptxInput,

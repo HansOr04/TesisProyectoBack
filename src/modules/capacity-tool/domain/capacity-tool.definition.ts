@@ -2,7 +2,6 @@ import { CapacityStrategy } from '../../assessment-core/domain/scoring.engine';
 import { EvaluationToolDefinition } from '../../evaluation-tool/domain/evaluation-tool.definition';
 import { AiDomainContext } from '../../evaluation-tool/application/evaluation-tool-ai.service';
 
-// Herramienta de Capacidades: análisis de capacidades frente al marco normativo por áreas.
 export const CAPACITY_TOOL_DEFINITION: EvaluationToolDefinition = {
   code: 'CAPACITY',
   slug: 'capacity',
@@ -11,7 +10,6 @@ export const CAPACITY_TOOL_DEFINITION: EvaluationToolDefinition = {
   report: {
     subtitle: 'Análisis de capacidades frente al marco normativo aplicable',
     scoreLevelPrefix: 'Capacidad',
-    // Mismo color que la herramienta en la aplicación.
     accentColor: 'F78008',
   },
   strategy: new CapacityStrategy(),

@@ -131,7 +131,6 @@ describe('ConsolidatedPlanService', () => {
       'Contrato de acopio',
       'Manual de funciones',
     ]);
-    // La de mitigación usa startWeek como fecha de inicio.
     expect(rows[2].startDate).toEqual(d('2026-02-10'));
   });
 
@@ -158,7 +157,6 @@ describe('ConsolidatedPlanService', () => {
     const cacaoteros = gantt?.measures.find((m) =>
       m.name.startsWith('Cacaoteros'),
     );
-    // Tres medidas: 100 + 50 + 40 → 63 % de avance promedio.
     expect(cacaoteros).toMatchObject({
       name: 'Cacaoteros',
       detail: '3 medidas',
@@ -168,7 +166,6 @@ describe('ConsolidatedPlanService', () => {
       progressPct: 63,
     });
 
-    // Un grupo con todo sin empezar sigue en pendiente.
     expect(
       gantt?.measures.find((m) => m.name.startsWith('Selva Viva')),
     ).toMatchObject({ status: 'PENDING', progressPct: 0 });
@@ -218,8 +215,6 @@ describe('ConsolidatedPlanService', () => {
 
     const gantt = await service.gantt('demo', 'project', 'p1');
     const [bar] = gantt?.measures ?? [];
-    // El Gantt del reporte tiene una columna ancha con texto ajustado: el
-    // nombre ya no se recorta y el contador va en su propia línea.
     expect(bar.name).toBe(
       'Asociación de Productores Agroecológicos del Norte Andino',
     );
@@ -304,7 +299,6 @@ describe('ConsolidatedPlanService.profilePlan', () => {
       'CAPACITY',
       'RISK',
     ]);
-    // La medida de riesgo toma el KPI del indicador de su riesgo.
     expect(plan[2]).toMatchObject({
       id: 'r1',
       evaluationId: 'ev-RISK',
@@ -314,12 +308,10 @@ describe('ConsolidatedPlanService.profilePlan', () => {
       startDate: d('2026-04-06'),
       status: 'IN_PROGRESS',
     });
-    // Lo implementado de una medida concluida llega tal cual.
     expect(plan[0]).toMatchObject({
       appliedImprovements: 'Manual aprobado en asamblea',
       verificationLink: 'https://example.com/acta.pdf',
     });
-    // Solo lee las evaluaciones vigentes de esa organización y proyecto.
     expect(
       prisma.assessmentIndicatorMeasure.findMany.mock.calls[0][0].where,
     ).toEqual({

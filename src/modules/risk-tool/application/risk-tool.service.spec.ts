@@ -57,7 +57,6 @@ function createPrismaMock() {
       findMany: jest.fn(),
       upsert: jest.fn(),
     },
-    // Parámetros por país: EC con umbral 5 (como el seed); otros sin override.
     assessmentRiskCountryParam: {
       findUnique: jest.fn(({ where }: { where: any }) =>
         Promise.resolve(
@@ -147,8 +146,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
     );
   });
 
-  // ── DTO validation (RF-05 business rules) ───────────────────────────────
-
   describe('ScoreKpiRiskDto / KpiResponseRiskDto validation', () => {
     it('accepts a valid response with score, observation and riskDescription', async () => {
       const dto = plainToInstance(KpiResponseRiskDto, {
@@ -198,8 +195,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
       expect(errors.some((e) => e.property === 'responses')).toBe(true);
     });
   });
-
-  // ── Respuestas + clasificación de riesgo (RF-05) ────────────────────────
 
   function buildEvaluation(overrides: AnyRecord = {}) {
     return {
@@ -300,7 +295,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
       prisma.assessmentRisk.upsert.mockResolvedValue({});
       prisma.assessmentEvaluation.update.mockResolvedValue({});
 
-      // score=4 > threshold(3) ⇒ NEGLIGIBLE
       await service.upsertResponses(
         ORG,
         'e1',
@@ -417,7 +411,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
 
       const result = await service.getEvaluation(ORG, 'e1');
 
-      // (1*8 + 3*4) / (1+3) = 5
       expect(result.sectionScores[0].weightedAvg).toBe(5);
       expect(result.globalScore).toBe(5);
     });
@@ -775,8 +768,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
       prisma.assessmentEvaluation.findFirst.mockResolvedValue(
         buildAiEvaluation(),
       );
-      // Una sola consulta para toda la evaluación: el principio 2 no tiene
-      // riesgos pendientes, así que la IA solo se llama para el principio 1.
       prisma.assessmentRisk.findMany.mockResolvedValue([
         {
           id: 'r1',
@@ -875,8 +866,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
 
       const result = await service.suggestMeasuresForEvaluation(ORG, 'e1');
 
-      // i1: score 2, peso 1 → impactScore = 1*(5-2) = 3
-      // i2: score 4, peso 4 → impactScore = 4*(5-4) = 4 (mayor peso gana pese a score más alto)
       expect(result.suggestions.map((s) => s.indicatorId)).toEqual([
         'i2',
         'i1',
@@ -939,11 +928,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
   });
 
   describe('mitigationPlanExportPptx', () => {
-    // pptxgenjs internally uses a dynamic `import('node:fs')` when
-    // serializing, which Jest's CJS test environment can't resolve without
-    // --experimental-vm-modules. We exercise the real slide-building logic
-    // (data queries, addXxxSlide calls) and only stub the final binary
-    // serialization step, which is third-party code, not ours to test here.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PptxGenJSCtor = require('pptxgenjs');
     let writeSpy: jest.SpyInstance;
@@ -952,8 +936,6 @@ describe('RiskToolService (F4-B03/B04)', () => {
       writeSpy = jest
         .spyOn(PptxGenJSCtor.prototype, 'write')
         .mockResolvedValue(Buffer.from('fake-pptx-content'));
-      // La diapositiva de evolución consulta el historial de evaluaciones
-      // completadas del perfil; sin historial no se agrega.
       prisma.assessmentEvaluation.findMany.mockResolvedValue([]);
     });
 

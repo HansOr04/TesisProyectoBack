@@ -19,8 +19,6 @@ import { AssessmentCoreModule } from '../assessment-core/assessment-core.module'
 import { JwtAuthGuard } from './presentation/guards/jwt-auth.guard';
 import { UserThrottlerGuard } from './presentation/guards/user-throttler.guard';
 
-// Global: RequestContextService y AuthorizationService los usan todos los
-// módulos Assessment, igual que el guard JWT que se registra como APP_GUARD.
 @Global()
 @Module({
   imports: [
@@ -51,8 +49,6 @@ import { UserThrottlerGuard } from './presentation/guards/user-throttler.guard';
     { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
     { provide: TOKEN_ISSUER, useClass: JwtTokenIssuer },
     { provide: OAUTH_VERIFIER, useClass: GoogleOAuthVerifier },
-    // El orden importa: el límite de peticiones cuenta por el usuario que deja
-    // JwtAuthGuard en la petición.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
   ],

@@ -5,22 +5,11 @@ import {
   readViewerVisibility,
 } from '../domain/assessment.constants';
 
-/**
- * Recorte de las organizaciones evaluadas (perfiles) que ve un usuario. Es un
- * filtro de Prisma sobre AssessmentOrganisationProfile, por eso se puede
- * esparcir en un `where` de perfil o anidar como `profile: scope`:
- *   - `{}`: sin recorte (superadministrador dueño, administrador o
- *     visualizador con todas las organizaciones habilitadas).
- *   - `evaluatorId`: evaluador, solo las organizaciones asignadas a él.
- *   - `AND: [{ id: { in } }]`: visualizador, solo las que le habilitaron.
- *     Va dentro de `AND` para no pisar un `id` del `where` que lo recibe.
- */
 export interface AssessmentProfileScope {
   evaluatorId?: string;
   AND?: { id: { in: string[] } }[];
 }
 
-/** Recursos que cuelgan de una organización evaluada (perfil). */
 export type AssessmentScopedResource =
   | 'profile'
   | 'evaluation'
@@ -32,15 +21,6 @@ export function isUnrestrictedScope(scope: AssessmentProfileScope): boolean {
   return !scope.evaluatorId && !scope.AND;
 }
 
-// RF-07 (F6-B03): un usuario con rol assessment_evaluator solo debe ver los
-// perfiles de organización que tiene asignados (evaluatorId), mientras que
-// assessment_admin y el superadministrador dueño del proyecto ven todos. El
-// visualizador (assessment_viewer) solo lee, y ve las organizaciones que un
-// administrador le habilitó. La distinción no es un permiso nuevo sino un
-// recorte de datos, por eso se resuelve aquí y se aplica como filtro Prisma en
-// cada endpoint de listado en lugar de vivir en el guard de permisos. Las
-// rutas que reciben el id de un recurso concreto lo comprueban con
-// assertInScope (vía AssessmentScopeGuard).
 @Injectable()
 export class AssessmentAccessScopeService {
   constructor(private readonly prisma: PrismaService) {}
@@ -79,11 +59,6 @@ export class AssessmentAccessScopeService {
     return { evaluatorId: userId };
   }
 
-  /**
-   * Con alcance recortado, el recurso tiene que colgar de una organización
-   * evaluada que el usuario puede ver. Responde 404, como la ficha de una
-   * organización ajena, para no revelar que el recurso existe.
-   */
   async assertInScope(
     organisation: string,
     scope: AssessmentProfileScope,

@@ -4,7 +4,6 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/shared/infrastructure/database/prisma.service';
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
 export const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 export const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
@@ -90,7 +89,6 @@ export async function cleanupProfiles(
   });
 }
 
-/** Indicadores que la evaluación exige: activos y aplicables a la organización. */
 export function applicableIndicators(evaluation: Evaluation) {
   return evaluation.template.sections.flatMap((s) =>
     s.indicators.filter((i) => i.active && i.applicable !== false),
@@ -105,11 +103,6 @@ function weightedAverage(items: { weight: number; score: number }[]) {
   return round2(items.reduce((sum, i) => sum + i.weight * i.score, 0) / total);
 }
 
-/**
- * Cálculo de referencia de las hojas originales, escrito aparte del motor:
- * promedio ponderado por peso de KPI en cada sección y por peso de sección en
- * el global, ambos redondeados a dos decimales.
- */
 export function expectedScores(
   evaluation: Evaluation,
   scores: Map<string, number>,
@@ -132,7 +125,6 @@ export function expectedScores(
   };
 }
 
-/** Nota determinista entre 1 y 10 a partir de la posición del indicador. */
 export const scoreFor = (index: number) => ((index * 7) % 10) + 1;
 
 export function scoreBody(
