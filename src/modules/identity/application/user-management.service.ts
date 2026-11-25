@@ -131,6 +131,10 @@ export class UserManagementService {
         );
       }
       this.assertCanManageSuperAdmin(user, actor);
+      // Reactivar una cuenta también es cambiarla.
+      if (!user.isActive || user.deletedAt) {
+        await this.assertCanManageAccount(organisation, user.id, actor);
+      }
       // Usuario existente en otra organización: se agrega como miembro.
       await this.prisma.user.update({
         where: { id: user.id },
@@ -187,17 +191,19 @@ export class UserManagementService {
       );
     }
     // El rol dentro del proyecto sí lo gestiona su administrador; la cuenta
-    // de un superadministrador (nombre, contraseña, activación) no.
-    if (
-      input.name !== undefined ||
-      input.password ||
-      input.isActive !== undefined
-    ) {
-      const target = await this.prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: { isSuperAdmin: true },
-      });
+    // (nombre, contraseña, activación) de un superadministrador o de alguien
+    // que también está en otro proyecto, no.
+    const target = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { isSuperAdmin: true, name: true, isActive: true },
+    });
+    const changesAccount =
+      Boolean(input.password) ||
+      (input.name !== undefined && input.name !== target.name) ||
+      (input.isActive !== undefined && input.isActive !== target.isActive);
+    if (changesAccount) {
       this.assertCanManageSuperAdmin(target, actor);
+      await this.assertCanManageAccount(organisation, userId, actor);
     }
     if (
       userId === actor.id &&
@@ -228,6 +234,26 @@ export class UserManagementService {
       await this.refreshTokens.revokeAllForUser(userId);
     }
     return this.getMember(organisation, userId);
+  }
+
+  /**
+   * Una cuenta es de la persona, no del proyecto: sin esto, un administrador
+   * agregaba a su proyecto la cuenta de otro y le cambiaba la contraseña.
+   */
+  private async assertCanManageAccount(
+    organisation: string,
+    userId: string,
+    actor: Actor,
+  ): Promise<void> {
+    if (actor.isSuperAdmin || actor.id === userId) return;
+    const elsewhere = await this.prisma.organisationMember.count({
+      where: { userId, organisationId: { not: organisation } },
+    });
+    if (elsewhere > 0) {
+      throw new ForbiddenException(
+        'Esta cuenta también pertenece a otro proyecto: solo un superadministrador puede cambiar su nombre, contraseña o estado',
+      );
+    }
   }
 
   private assertCanManageSuperAdmin(

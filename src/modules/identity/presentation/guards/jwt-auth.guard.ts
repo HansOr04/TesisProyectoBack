@@ -8,10 +8,17 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { AUTH_CONTEXT_KEY, AuthContext } from '../../domain/auth-context';
+import {
+  AccessTokenPayload,
+  AUTH_CONTEXT_KEY,
+  AuthContext,
+} from '../../domain/auth-context';
 import { TOKEN_ISSUER, TokenIssuerPort } from '../../domain/ports';
 import { PrismaService } from '../../../../shared/infrastructure/database/prisma.service';
-import { resolveOrganisationAccess } from '../../application/organisation-access';
+import {
+  loadCurrentAccount,
+  resolveOrganisationAccess,
+} from '../../application/organisation-access';
 import {
   IS_PUBLIC_KEY,
   REQUIRE_AUTHENTICATED_KEY,
@@ -70,31 +77,26 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    let auth: AuthContext;
+    let payload: AccessTokenPayload;
     try {
-      const payload = await this.tokens.verify(token);
-      auth = {
-        userId: payload.sub,
-        email: payload.email,
-        isSuperAdmin: payload.isSuperAdmin === true,
-        isPlatformSuperAdmin: payload.isSuperAdmin === true,
-        organisations: payload.orgs ?? [],
-      };
+      payload = await this.tokens.verify(token);
     } catch {
       throw new UnauthorizedException('Invalid token');
     }
 
-    // Un usuario desactivado o borrado pierde el acceso de inmediato aunque
-    // su token no haya caducado.
-    const account = await this.prisma.user.findUnique({
-      where: { id: auth.userId },
-      select: { isActive: true, deletedAt: true },
-    });
-    if (!account || !account.isActive || account.deletedAt) {
+    // Permisos y membresías de la base, no del token: un usuario desactivado,
+    // degradado o sacado de un proyecto pierde el acceso de inmediato.
+    const account = await loadCurrentAccount(this.prisma, payload.sub);
+    if (!account) {
       throw new UnauthorizedException('Account is inactive');
     }
-
-    auth.isPlatformSuperAdmin = auth.isSuperAdmin;
+    const auth: AuthContext = {
+      userId: payload.sub,
+      email: payload.email,
+      isSuperAdmin: account.isSuperAdmin,
+      isPlatformSuperAdmin: account.isSuperAdmin,
+      organisations: account.organisations,
+    };
 
     // Dentro de un proyecto, el superadministrador solo conserva el acceso
     // total si es quien lo creó; en los demás entra como cualquier miembro.

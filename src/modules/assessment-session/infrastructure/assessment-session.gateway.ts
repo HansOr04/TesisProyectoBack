@@ -10,7 +10,10 @@ import {
 import { Server, Socket } from 'socket.io';
 import { TOKEN_ISSUER, TokenIssuerPort } from '../../identity/domain/ports';
 import { AssessmentAccessScopeService } from '../../assessment-core/application/assessment-access-scope.service';
-import { resolveOrganisationAccess } from '../../identity/application/organisation-access';
+import {
+  loadCurrentAccount,
+  resolveOrganisationAccess,
+} from '../../identity/application/organisation-access';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import {
   RealtimeNotifierPort,
@@ -29,7 +32,11 @@ export interface AssessmentSocketAuth {
 // (eval:<evaluationId>) para no reenviar eventos a clientes ajenos. El
 // handshake valida el mismo JWT que la API HTTP, y un evaluador solo entra a
 // la sala de una evaluación de una organización que tiene asignada.
-@WebSocketGateway({ namespace: '/assessments', cors: true })
+@WebSocketGateway({
+  namespace: '/assessments',
+  // Mismos orígenes que la API; sin CORS_ORIGIN (local) se admite cualquiera.
+  cors: { origin: process.env.CORS_ORIGIN?.split(',') ?? true },
+})
 export class AssessmentSessionGateway
   implements OnGatewayConnection, RealtimeNotifierPort
 {
@@ -76,9 +83,14 @@ export class AssessmentSessionGateway
     if (!socketAuth || !body?.org || !body?.evaluationId) {
       return;
     }
+    const account = await loadCurrentAccount(this.prisma, socketAuth.userId);
+    if (!account) {
+      client.disconnect(true);
+      return;
+    }
     const access = await resolveOrganisationAccess(
       this.prisma,
-      socketAuth,
+      { userId: socketAuth.userId, ...account },
       body.org,
     );
     if (!access.allowed) {

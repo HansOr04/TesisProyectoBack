@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './modules/audit/audit.module';
 import { IdentityModule } from './modules/identity/identity.module';
+import { ipThrottler } from './modules/identity/presentation/guards/ip-throttler';
 import { AssessmentAiModule } from './modules/assessment-ai/assessment-ai.module';
 import { OrganizationalToolModule } from './modules/organizational-tool/organizational-tool.module';
 import { AssessmentAnalyticsModule } from './modules/assessment-analytics/assessment-analytics.module';
@@ -14,6 +15,7 @@ import { RiskToolModule } from './modules/risk-tool/risk-tool.module';
 import { validateEnv } from './shared/infrastructure/config/env.validation';
 import { PrismaModule } from './shared/infrastructure/database/prisma.module';
 import { RequestIdMiddleware } from './shared/infrastructure/http/request-id.middleware';
+import { RequestLogMiddleware } from './shared/infrastructure/http/request-log.middleware';
 import { LoggerModule } from './shared/infrastructure/logging/logger.module';
 import { HealthController } from './shared/infrastructure/http/health.controller';
 
@@ -23,7 +25,10 @@ import { HealthController } from './shared/infrastructure/http/health.controller
     // Límite global generoso, por usuario con sesión (UserThrottlerGuard, en
     // IdentityModule); los endpoints de IA aplican su propio límite por usuario
     // (AssessmentAiThrottlerGuard, 10/min).
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
+    ThrottlerModule.forRoot({
+      errorMessage: 'Demasiados intentos. Espera un minuto y vuelve a probar.',
+      throttlers: [{ name: 'default', ttl: 60000, limit: 300 }, ipThrottler],
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     LoggerModule,
@@ -41,6 +46,6 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, RequestLogMiddleware).forRoutes('*');
   }
 }

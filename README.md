@@ -61,3 +61,10 @@ heroku run npm run prisma:seed:prod
 
 Entornos, dónde vive cada variable y reglas para los secretos: [`docs/entornos-y-secretos.md`](docs/entornos-y-secretos.md).
 Respaldos diarios de la base y cómo restaurarlos: [`docs/respaldos.md`](docs/respaldos.md).
+
+## Documentación
+
+- [Manual técnico](docs/manual-tecnico.md): arquitectura, instalación, despliegue y respaldos
+- [Manual de usuario](https://github.com/HansOr04/TesisFrontend/blob/main/docs/manual-usuario.md)
+- [Lista de verificación posterior al despliegue](docs/lista-verificacion.md)
+- [Puesta en marcha](docs/puesta-en-marcha.md)

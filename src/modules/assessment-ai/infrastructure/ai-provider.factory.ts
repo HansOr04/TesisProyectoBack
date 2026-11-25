@@ -7,7 +7,7 @@ export interface AiProviderFactoryResult {
   provider: AiProvider;
   missingApiKey: boolean;
   /** Nombre de la variable de entorno con la API key del proveedor elegido. */
-  apiKeyEnvVar: string;
+  requiredVariable: string;
 }
 
 // Factory Method: la selección del proveedor vive en un solo lugar y el
@@ -24,7 +24,7 @@ export function createAiProviderFromEnv(
     return {
       provider: new NvidiaProvider(httpService, apiKey, model),
       missingApiKey: !apiKey,
-      apiKeyEnvVar: 'NVIDIA_API_KEY',
+      requiredVariable: 'NVIDIA_API_KEY',
     };
   }
 
@@ -36,6 +36,6 @@ export function createAiProviderFromEnv(
   return {
     provider: new GeminiProvider(httpService, apiKey, model, fastModel),
     missingApiKey: !apiKey,
-    apiKeyEnvVar: 'GEMINI_API_KEY',
+    requiredVariable: 'GEMINI_API_KEY',
   };
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 import { AccessTokenPayload } from '../domain/auth-context';
@@ -29,6 +30,8 @@ export interface AuthenticatedSession {
 // con puertos (DIP) y por eso se puede probar sin red ni criptografía real.
 @Injectable()
 export class AuthService {
+  private unknownAccountHash?: Promise<string>;
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasherPort,
@@ -47,6 +50,10 @@ export class AuthService {
       include: { memberships: { select: { organisationId: true } } },
     });
     if (!user || !user.isActive || user.deletedAt || !user.passwordHash) {
+      // Mismo tiempo de respuesta que con una cuenta real: si no, se podría
+      // averiguar qué correos existen.
+      this.unknownAccountHash ??= this.hasher.hash(randomUUID());
+      await this.hasher.compare(password, await this.unknownAccountHash);
       throw new UnauthorizedException('Credenciales inválidas');
     }
     const ok = await this.hasher.compare(password, user.passwordHash);
