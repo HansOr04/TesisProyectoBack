@@ -148,7 +148,8 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     const attempt = (e: string) =>
       api().post('/auth/login').send({ email: e, password: 'incorrecta-123' });
     for (let i = 0; i < 10; i++) await attempt(email).expect(401);
-    await attempt(email).expect(429);
+    const blocked = await attempt(email).expect(429);
+    expect(blocked.body.message).toContain('Demasiados intentos');
     // Otra persona detrás de la misma IP puede entrar.
     await attempt(`otra-${email}`).expect(401);
   });
