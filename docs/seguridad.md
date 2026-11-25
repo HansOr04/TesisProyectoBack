@@ -49,6 +49,14 @@ lectura, sobre la demo publicada. No incluye una prueba de intrusión externa.
 - **Media y baja.** Quedan vulnerabilidades moderadas y bajas en dependencias
   (22 en el servidor y 10 en la web). El detalle sale con `npm audit`.
 
+## Alertas de CodeQL
+
+- `clear-text-storage` en `auth.controller.ts`: falso positivo. El token de
+  renovación va en una cookie HttpOnly y Secure, es aleatorio, rota en cada uso
+  y en la base solo está su sha256.
+- `file-access-to-http` en `scripts/carga-guardado.mjs`: es lo que hace el
+  script, leer las cuentas de prueba e iniciar sesión con ellas.
+
 ## Cómo se mantiene
 
 - `test/security-routes.e2e-spec.ts` recorre **todas** las rutas registradas:

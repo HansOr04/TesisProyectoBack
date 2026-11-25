@@ -44,14 +44,14 @@ export class AssessmentLlmClientService {
     @Optional() private readonly prisma?: PrismaService,
   ) {
     this.logger?.setContext({ service: 'AssessmentLlmClientService' });
-    const { provider, missingApiKey, apiKeyEnvVar } =
+    const { provider, missingApiKey, requiredVariable } =
       createAiProviderFromEnv(httpService);
     this.provider = provider;
     this.providerName = provider.name;
     if (missingApiKey) {
-      this.missingApiKeyVar = apiKeyEnvVar;
+      this.missingApiKeyVar = requiredVariable;
       this.logger?.warn(
-        `${apiKeyEnvVar} is not set — Assessment AI features will fail until configured`,
+        `${requiredVariable} is not set — Assessment AI features will fail until configured`,
       );
     }
     this.logger?.info(`Assessment AI provider active: ${this.providerName}`);
