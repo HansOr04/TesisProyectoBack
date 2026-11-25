@@ -78,6 +78,11 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+// El reporte debe salir en menos de 10 s (HU-69): si la IA no responde a tiempo,
+// se arma con los textos calculados a partir de los datos.
+const REPORT_AI_BUDGET_MS = 8_000;
+const MIN_ATTEMPT_MS = 2_000;
+
 @Injectable()
 export class EvaluationToolAiService {
   constructor(
@@ -325,7 +330,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
    * Llamada de reporte: modelo rápido, modo JSON y caché. Si la respuesta
    * llega cortada (el modelo a veces termina antes de cerrar el JSON), se
    * reintenta una vez; nunca se guarda en caché una respuesta ilegible.
-   * Ambos intentos caben en los 15 s del export.
+   * Ambos intentos caben en REPORT_AI_BUDGET_MS.
    */
   private async completeReportJson<T>(
     capability: string,
@@ -338,12 +343,14 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     const started = Date.now();
     let lastError: unknown;
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const remaining = REPORT_AI_BUDGET_MS - (Date.now() - started);
+      if (attempt > 1 && remaining < MIN_ATTEMPT_MS) break;
       const result = await this.llmClient.complete(
         systemPrompt,
         userPrompt,
         maxOutputTokens,
         temperature,
-        Math.max(3_000, 15_000 - (Date.now() - started)),
+        remaining,
         {
           fast: true,
           cache: true,
