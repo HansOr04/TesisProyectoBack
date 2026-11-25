@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/infrastructure/http/all-exceptions.filter';
+import { ServerErrorMonitor } from './shared/infrastructure/logging/server-error-monitor.service';
 import { StructuredLoggerService } from './shared/infrastructure/logging/structured-logger.service';
 
 async function bootstrap(): Promise<void> {
@@ -36,7 +37,10 @@ async function bootstrap(): Promise<void> {
     maxAge: 7200,
   });
   app.useGlobalFilters(
-    new AllExceptionsFilter(await app.resolve(StructuredLoggerService)),
+    new AllExceptionsFilter(
+      await app.resolve(StructuredLoggerService),
+      app.get(ServerErrorMonitor),
+    ),
   );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   // Socket.IO para AssessmentSessionGateway (NestFactory no lo enlaza solo)
