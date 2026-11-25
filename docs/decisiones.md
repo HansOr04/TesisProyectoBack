@@ -38,4 +38,7 @@ Por qué está así. El detalle de cada archivo está en
 | `require` de pptxgenjs | Su módulo no tiene exportación por defecto y falla en las pruebas |
 | Organizaciones borradas que reviven | El índice único no distingue las borradas |
 | Fechas de medidas a medianoche UTC | Con zona horaria, en Ecuador salía un día menos |
+| Imagen Docker `node:slim` y no Alpine | Prisma 5 necesita OpenSSL y glibc |
+| La imagen lleva `src` y `tsconfig` | El seed corre con ts-node e importa las plantillas |
+| El contenedor corre como `node` | Nunca como administrador |
 | Sin comentarios en el código | La documentación vive en un solo lugar y el pipeline lo vigila |
