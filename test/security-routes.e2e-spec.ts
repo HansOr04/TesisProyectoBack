@@ -15,7 +15,7 @@ const ADMIN = {
   password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
 };
 // Contraseñas generadas en cada corrida.
-const newPassword = () => randomUUID();
+const newPassword = (): string => randomUUID();
 const PASSWORD = newPassword();
 const CHANGED_PASSWORD = newPassword();
 
