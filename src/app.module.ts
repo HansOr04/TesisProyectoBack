@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './modules/audit/audit.module';
 import { IdentityModule } from './modules/identity/identity.module';
+import { ipThrottler } from './modules/identity/presentation/guards/ip-throttler';
 import { AssessmentAiModule } from './modules/assessment-ai/assessment-ai.module';
 import { OrganizationalToolModule } from './modules/organizational-tool/organizational-tool.module';
 import { AssessmentAnalyticsModule } from './modules/assessment-analytics/assessment-analytics.module';
@@ -23,7 +24,10 @@ import { HealthController } from './shared/infrastructure/http/health.controller
     // Límite global generoso, por usuario con sesión (UserThrottlerGuard, en
     // IdentityModule); los endpoints de IA aplican su propio límite por usuario
     // (AssessmentAiThrottlerGuard, 10/min).
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60000, limit: 300 },
+      ipThrottler,
+    ]),
     ScheduleModule.forRoot(),
     PrismaModule,
     LoggerModule,
