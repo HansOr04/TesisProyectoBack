@@ -279,7 +279,7 @@ Auditoría. Se conserva 24 meses.
 | `contactEmail` | texto | no |  | Correo de contacto |
 | `contactPhone` | texto | no |  | `+prefijo número`, con los dígitos de su país |
 | `evaluatorId` | texto | no |  | Evaluador responsable asignado |
-| `confidential` | sí/no | sí | false | Excluye este perfil de la vista cross-organización del Administrador (RF-08) |
+| `confidential` | sí/no | sí | false | Excluye este perfil de la vista cross-organización del Administrador |
 | `parentProfileId` | texto | no |  | Asociación de nivel 2 a la que pertenece → `AssessmentOrganisationProfile` |
 
 Único: `(organisation, name)`.
@@ -350,7 +350,7 @@ Estructura de una herramienta en un proyecto. Cada cambio sobre una versión ya 
 | `name` | texto | sí |  | Nombre |
 | `description` | texto | no |  | Descripción |
 | `active` | sí/no | sí | true | Solo una vigente por herramienta y proyecto |
-| `labels` | JSON | no |  | I18n es/en, mismo mecanismo que AssessmentTemplate.labels |
+| `labels` | JSON | no |  | Textos en otros idiomas |
 | `createdBy` | texto | no |  | Quién lo creó |
 | `riskThreshold` | decimal | no | 5 | Umbral por defecto de Riesgos (5) |
 
@@ -368,7 +368,7 @@ Dimensión, área o principio, según la herramienta.
 | `updatedAt` | fecha y hora | sí |  | Último cambio |
 | `deletedAt` | fecha y hora | no |  | Borrado lógico: con fecha, está borrado |
 | `templateId` | texto | sí |  | Plantilla → `AssessmentTemplate` (se borra con él) |
-| `number` | entero | sí |  | "número" del RF-03/04/05 |
+| `number` | entero | sí |  | Número de la sección |
 | `name` | texto | sí |  | Nombre |
 | `description` | texto | no |  | Descripción |
 | `weight` | decimal | sí | 1 | Peso para el promedio ponderado global |
@@ -388,7 +388,7 @@ KPI.
 | `updatedAt` | fecha y hora | sí |  | Último cambio |
 | `deletedAt` | fecha y hora | no |  | Borrado lógico: con fecha, está borrado |
 | `sectionId` | texto | sí |  | Sección → `AssessmentSection` (se borra con él) |
-| `code` | texto | sí |  | P.ej. "A-1.3" — estable para paridad con Excel |
+| `code` | texto | sí |  | Por ejemplo `KPI 1.3`. Estable entre versiones |
 | `name` | texto | sí |  | Nombre |
 | `description` | texto | no |  | Descripción |
 | `helpText` | texto | no |  | Qué documento/proceso concreto debe existir para este KPI |
@@ -438,7 +438,7 @@ Calificación de un KPI.
 | `evaluationId` | texto | sí |  | Evaluación → `AssessmentEvaluation` (se borra con él) |
 | `indicatorId` | texto | sí |  | KPI → `AssessmentIndicator` |
 | `score` | entero | sí |  | 1..10 entero — validado también en DTO |
-| `observation` | texto | sí |  | Obligatoria (RF-03/04/05) |
+| `observation` | texto | sí |  | Observación obligatoria |
 | `isCritical` | sí/no | sí | false | Crítico: nota de 5 o menos, o marcado a mano |
 | `manualCritical` | sí/no | sí | false | Marcado a mano |
 | `scoredBy` | texto | sí |  | Trazabilidad de autoría |
