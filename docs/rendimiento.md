@@ -35,3 +35,4 @@ CA-68.1: el 95 % de los guardados en menos de 1 segundo.
 |---|---|---|---|---|
 | Local, antes de corregir los límites | 8 nov 2026 | 9 de 20 | 300 de 396 | 59 ms |
 | Local, después | 8 nov 2026 | 20 de 20 | 391 de 391 | 61 ms |
+| Local, con los límites por cuenta de HU-71 | 25 nov 2026 | 20 de 20 | 393 de 393 | 53 ms |
