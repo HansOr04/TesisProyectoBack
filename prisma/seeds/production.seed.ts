@@ -3,17 +3,12 @@ import * as bcrypt from 'bcrypt';
 import { createInterface } from 'readline';
 import { seedAssessment } from './assessment.seed';
 
-// `npm run prisma:seed:prod` — arranque de un entorno real: crea SOLO la
-// organización y un superadministrador (con la contraseña pedida por consola
-// o SEED_ADMIN_PASSWORD), más módulos/permisos/roles y plantillas. No crea
-// cuentas de demostración ni contraseñas por defecto.
 const prisma = new PrismaClient();
 
 function ask(question: string, hidden = false): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     if (hidden) {
-      // Oculta la contraseña mientras se escribe.
       const stdout = process.stdout as NodeJS.WriteStream & {
         _writeSilently?: boolean;
       };
@@ -85,8 +80,6 @@ async function main(): Promise<void> {
       isSuperAdmin: true,
     },
   });
-  // El administrador inicial es el superadministrador dueño del proyecto
-  // base: solo el que crea un proyecto tiene acceso total a él.
   await prisma.organisation.updateMany({
     where: { id: organisation.id, createdById: null },
     data: { createdById: admin.id },

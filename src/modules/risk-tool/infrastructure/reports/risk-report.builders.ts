@@ -40,10 +40,6 @@ const RISK_CLASS_LABEL: Record<string, string> = {
   NON_NEGLIGIBLE: 'No despreciable',
 };
 
-/**
- * Plan de mitigación: una fila por medida (o por riesgo sin medida), con el
- * KPI de origen, y una segunda hoja con los riesgos por sección.
- */
 export async function buildMitigationPlanExcel(
   definition: EvaluationToolDefinition,
   evaluation: EvaluationWithStructure,
@@ -194,10 +190,6 @@ export interface MitigationPptxInput {
   customNarrative?: boolean;
   insights: AiReportInsights | null;
   swot?: AiSwot | null;
-  /**
-   * Plan consolidado que reemplaza al Gantt propio de la herramienta cuando
-   * al exportar se pide un alcance mayor (la organización o el proyecto).
-   */
   consolidatedGantt?: {
     title: string;
     nameHeader?: string;
@@ -258,7 +250,6 @@ export async function buildMitigationPlanPptx(
       const ids = new Set(section.indicators.map((i) => i.id));
       const list = risks.filter((r) => ids.has(r.indicatorId));
       const nonNeg = list.filter((r) => r.class === 'NON_NEGLIGIBLE').length;
-      // Solo los no despreciables necesitan medida de mitigación.
       const missing = list.filter(
         (r) => r.class === 'NON_NEGLIGIBLE' && r.measures.length === 0,
       ).length;

@@ -20,7 +20,6 @@ import { AssessmentProfileScope } from './assessment-access-scope.service';
 
 const ACTIVE_EVALUATION_STATUSES = ['DRAFT', 'IN_PROGRESS'] as const;
 
-// RF-02: CRUD de organizaciones evaluadas (AssessmentOrganisationProfile).
 type ToolScoreSnapshot = {
   evaluationId: string;
   status: string;
@@ -55,10 +54,6 @@ export class AssessmentProfilesService {
     return pageResult(query, items, total);
   }
 
-  // RF-08: vista cross-organización para el Administrador de plataforma
-  // (isSuperAdmin global). Excluye los perfiles marcados `confidential` —
-  // ni siquiera el superadmin los ve aquí; la organización dueña sigue
-  // viéndolos normalmente en su propio `:org/assessments/profiles`.
   async listAllForAdmin(actorId: string) {
     const profiles = await this.prisma.assessmentOrganisationProfile.findMany({
       where: {
@@ -95,9 +90,6 @@ export class AssessmentProfilesService {
     return profile;
   }
 
-  // Una asociación Nivel 2 (associationLevel="LEVEL_2") puede agrupar empresas
-  // y/o asociaciones Nivel 1 como miembros (parentProfileId). No se permite
-  // anidar una Nivel 2 dentro de otra ni que un perfil sea su propio padre.
   private async validateParentProfile(
     organisation: string,
     parentProfileId: string,
@@ -135,11 +127,6 @@ export class AssessmentProfilesService {
     dto: CreateAssessmentProfileDto,
     createdBy?: string,
   ) {
-    // AssessmentOrganisationProfile has a hard unique index on (organisation, name)
-    // that isn't scoped to deletedAt, so a previously deleted profile with
-    // this exact name must be revived via upsert, not re-created, or this
-    // throws a P2002 constraint violation even though the name is logically
-    // free again from the user's point of view.
     const existing = await this.prisma.assessmentOrganisationProfile.findUnique(
       {
         where: { organisation_name: { organisation, name: dto.name } },
@@ -162,9 +149,6 @@ export class AssessmentProfilesService {
     try {
       const profile = await this.prisma.assessmentOrganisationProfile.upsert({
         where: { organisation_name: { organisation, name: dto.name } },
-        // Prisma skips undefined fields on update, so reviving a soft-deleted
-        // row via upsert would otherwise leave any optional field the caller
-        // didn't set at its stale prior value instead of clearing it.
         update: {
           ...dto,
           tradeName: dto.tradeName ?? null,
@@ -291,10 +275,6 @@ export class AssessmentProfilesService {
     'RISK',
   ] as const;
 
-  // Último puntaje persistido (AssessmentEvaluation.globalScore) por herramienta para
-  // un perfil — no se recalcula en vivo aquí para no acoplar assessment-core a los
-  // servicios de cada herramienta; refleja el último resultado guardado al
-  // completar la evaluación.
   private async getToolScores(organisation: string, profileId: string) {
     const byProfile = await this.getToolScoresForProfiles(organisation, [
       profileId,
@@ -302,8 +282,6 @@ export class AssessmentProfilesService {
     return byProfile.get(profileId) as ToolScoresByTool;
   }
 
-  // Una sola consulta para todos los perfiles: se trae cada evaluación (más
-  // reciente primero) y se conserva la primera por (perfil, herramienta).
   private async getToolScoresForProfiles(
     organisation: string,
     profileIds: string[],
@@ -353,9 +331,6 @@ export class AssessmentProfilesService {
     return result;
   }
 
-  // Panel de una asociación: sus propios puntajes (se evalúa igual que
-  // cualquier perfil) + las empresas/asociaciones Nivel 1 vinculadas
-  // (parentProfileId) con el puntaje de cada una por herramienta.
   async getAssociationOverview(
     organisation: string,
     parentProfileId: string,

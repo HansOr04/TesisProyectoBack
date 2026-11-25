@@ -30,9 +30,6 @@ function createApplicabilityMock() {
   } as AnyRecord;
 }
 
-// El servicio pide la lista de evaluaciones por herramienta (findMany) y toma
-// la más reciente por perfil; este helper convierte "una evaluación por
-// herramienta" (como se expresaban los casos) en esa lista.
 function mockEvaluations(
   prisma: AnyRecord,
   byTool: (tool: string) => AnyRecord | null,
@@ -131,8 +128,8 @@ describe('AssessmentDashboardService', () => {
       expect.objectContaining({
         evaluationId: 'ev1',
         status: 'IN_PROGRESS',
-        globalScore: 6, // weighted avg of 3 and 9, equal weight
-        criticalAlertCount: 1, // ind1 is critical and has no measure
+        globalScore: 6,
+        criticalAlertCount: 1,
       }),
     );
     expect(rows[0].criticalAlertCount).toBe(1);

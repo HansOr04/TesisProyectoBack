@@ -8,8 +8,6 @@ import {
   validateSync,
 } from 'class-validator';
 
-// Fail-fast: si falta una variable obligatoria el proceso no arranca, en vez
-// de fallar más tarde en la primera petición.
 class EnvironmentVariables {
   @IsOptional()
   @IsIn(['development', 'test', 'production'])
@@ -28,9 +26,6 @@ class EnvironmentVariables {
   @IsString()
   JWT_SECRET: string;
 
-  // Jornada completa: el token de acceso vive en memoria del navegador, así
-  // que al recargar se renueva con el refresh token rotatorio. Con 15 min la
-  // renovación era constante y cualquier fallo se notaba enseguida.
   @IsOptional()
   @IsString()
   JWT_EXPIRES_IN = '24h';
@@ -41,7 +36,6 @@ class EnvironmentVariables {
   @Min(1)
   REFRESH_TOKEN_TTL_DAYS = 7;
 
-  // Retención de la auditoría (ActivityLog): meses que se conservan.
   @IsOptional()
   @Transform(({ value }) => Number(value))
   @IsInt()
@@ -66,7 +60,6 @@ export function validateEnv(config: Record<string, unknown>) {
     enableImplicitConversion: true,
   });
   const errors = validateSync(validated, { skipMissingProperties: false });
-  // En producción un secreto débil o el de ejemplo deja los JWT falsificables.
   if (validated.NODE_ENV === 'production') {
     const secret = validated.JWT_SECRET ?? '';
     if (secret.length < 32 || secret.includes('cambia-este-secreto')) {

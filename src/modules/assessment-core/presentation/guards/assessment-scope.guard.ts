@@ -19,12 +19,6 @@ interface ScopedToMetadata {
   from: 'params' | 'body';
 }
 
-/**
- * La ruta trabaja sobre un recurso de una organización evaluada (su id viene
- * en `param` de la ruta o del cuerpo): un evaluador solo llega a las que
- * tiene asignadas. Va después de @RequireAssessmentPermission, que decide si
- * el rol puede hacer la acción; este decide sobre qué datos.
- */
 export const ScopedTo = (
   resource: AssessmentScopedResource,
   param = 'id',
@@ -57,8 +51,6 @@ export class AssessmentScopeGuard implements CanActivate {
     const organisation: string | undefined = request.params?.org;
     const id: unknown = request[scoped.from]?.[scoped.param];
     const user = await this.requestContext.getCurrentUser();
-    // Sin usuario u organización ya respondió el guard de permisos; sin id
-    // (cuerpo incompleto) responde la validación del DTO.
     if (!user || !organisation || typeof id !== 'string') {
       return true;
     }

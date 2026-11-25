@@ -13,8 +13,7 @@ Todos los comandos necesitan la CLI de Heroku con sesión iniciada
 heroku pg:backups:schedule DATABASE_URL --at '03:00 America/Guayaquil' -a evaluartesis
 ```
 
-Se elige las 03:00 porque nadie usa la plataforma a esa hora y coincide con la
-purga diaria de la auditoría.
+Se elige las 03:00 porque nadie usa la plataforma a esa hora.
 
 Comprobar que quedó programado y sacar el primer respaldo sin esperar a la noche:
 
@@ -83,4 +82,5 @@ sacar un respaldo del estado actual con `pg:backups:capture`.
   tablas comparadas coinciden con la demo, y el servidor conectado a la copia
   inicia sesión, muestra el panel consolidado, los resúmenes de las
   evaluaciones y genera los Excel.
-- Pendiente: el 15 de noviembre, `pg:backups` debe mostrar 7 respaldos diarios.
+- El 25 de noviembre `pg:backups` mostró los 7 respaldos diarios (del 19 al 25,
+  `a012` a `a019` sin contar el manual `b017`), todos `Completed`: CA-66.2 cumplido.

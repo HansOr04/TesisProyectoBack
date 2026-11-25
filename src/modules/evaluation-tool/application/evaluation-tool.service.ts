@@ -52,25 +52,12 @@ export interface ScoreResult {
   globalScore: number;
 }
 
-// Datos precargados en lote para construir el panel de organizaciones sin N+1.
 export interface OverviewContext {
   latestByProfile: Map<string, EvaluationWithStructure>;
   excludedByProfile: Map<string, Set<string>>;
-  /** null: la herramienta cuenta secciones críticas, no un total propio. */
   criticalByEvaluation: Map<string, number> | null;
 }
 
-/**
- * Flujo común de una herramienta de evaluación (Template Method): plantilla
- * versionada → evaluación por perfil → calificación de KPI → cierre con
- * puntajes → panel de organizaciones e historial. Las herramientas concretas
- * aportan su EvaluationToolDefinition (código, etiquetas, estrategia) y
- * redefinen los ganchos (`persistResponses`, `countCriticalByEvaluation`,
- * `countMeasuresByEvaluation`) cuando su modelo de medidas difiere.
- *
- * No conoce el ORM: toda la persistencia entra por los puertos
- * TemplateRepository y EvaluationRepository.
- */
 export abstract class EvaluationToolService {
   protected constructor(
     protected readonly definition: EvaluationToolDefinition,
@@ -94,12 +81,6 @@ export abstract class EvaluationToolService {
     return this.definition.section.singularEn;
   }
 
-  // ── Ganchos redefinibles por herramienta ─────────────────────────────────
-
-  /**
-   * Persiste las respuestas de KPI. Riesgos lo redefine para clasificar y
-   * guardar los riesgos en la misma transacción.
-   */
   protected async persistResponses(
     evaluation: EvaluationWithStructure,
     dto: ScoreKpiInput,
@@ -114,28 +95,17 @@ export abstract class EvaluationToolService {
     );
   }
 
-  /**
-   * Críticos propios de la herramienta para el panel. Por defecto no hay: el
-   * panel cuenta las secciones críticas (dimensiones o áreas) de cada fila.
-   */
   protected countCriticalByEvaluation(
     _evaluations: EvaluationWithStructure[],
   ): Promise<Map<string, number> | null> {
     return Promise.resolve(null);
   }
 
-  /** Total/hechas de medidas por evaluación para el historial de evolución. */
   protected abstract countMeasuresByEvaluation(
     organisation: string,
     evaluationIds: string[],
   ): Promise<Map<string, MeasureCounts>>;
 
-  // ── Estructura (administrador) ───────────────────────────────────────────
-
-  /**
-   * Trazabilidad de cambios estructurales: registra en la auditoría qué
-   * entidad cambió y cada campo con su valor anterior y nuevo.
-   */
   private async recordStructureChange(
     organisation: string,
     entity: 'section' | 'indicator',
@@ -197,12 +167,6 @@ export abstract class EvaluationToolService {
     return template;
   }
 
-  /**
-   * Devuelve una plantilla segura de mutar estructuralmente: la vigente si
-   * ninguna evaluación la referencia, o una nueva versión clonada (la anterior
-   * se desactiva) — así una edición nunca cambia lo que ve una evaluación ya
-   * iniciada (regla de inmutabilidad).
-   */
   protected async ensureWritableTemplate(
     organisation: string,
     templateId: string,
@@ -483,13 +447,6 @@ export abstract class EvaluationToolService {
     return updated;
   }
 
-  /**
-   * "Eliminar" un KPI lo desactiva, no lo borra. Antes se marcaba
-   * `deletedAt` y el KPI desaparecía de todas partes —incluida la pantalla
-   * de KPI aplicables—, así que no había forma de volver a encenderlo ni de
-   * decidir por organización si aplica. Desactivado deja de contar para las
-   * evaluaciones nuevas pero sigue a la vista.
-   */
   async deactivateIndicator(
     organisation: string,
     indicatorId: string,
@@ -529,8 +486,6 @@ export abstract class EvaluationToolService {
     );
   }
 
-  // ── Evaluaciones y respuestas ────────────────────────────────────────────
-
   async createEvaluation(
     organisation: string,
     dto: { profileId: string },
@@ -546,8 +501,6 @@ export abstract class EvaluationToolService {
 
     const template = await this.getActiveTemplate(organisation);
 
-    // Idempotencia: si ya hay una evaluación en curso para este perfil se
-    // devuelve esa en vez de crear un duplicado (doble clic, recarga).
     const active = await this.evaluations.findActiveForProfile(
       organisation,
       this.tool,
@@ -650,7 +603,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  /** Puntajes persistidos si la evaluación está completada; si no, en vivo. */
   protected async resolveScores(
     evaluation: EvaluationWithStructure,
   ): Promise<ScoreResult> {
@@ -848,11 +800,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  // ── Panel general de organizaciones ──────────────────────────────────────
-
-  // Perfiles de primer nivel (parentProfileId: null) con su última evaluación
-  // de esta herramienta. Las asociaciones Nivel 2 sin evaluación propia se
-  // consolidan a partir de sus miembros.
   async organisationsOverview(
     organisation: string,
     scope: AssessmentProfileScope = {},
@@ -913,8 +860,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  // Carga en lote todo lo que necesita el panel: última evaluación por perfil,
-  // exclusiones de aplicabilidad para las no completadas y críticos propios.
   protected async loadOverviewContext(
     organisation: string,
     profileIds: string[],
@@ -1009,8 +954,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  // Asociación Nivel 2 sin evaluación propia: promedio de sus miembros por
-  // sección, para que el panel refleje el estado agregado y no "sin evaluación".
   protected consolidateChildrenRow(
     profile: ProfileRecord,
     children: ProfileRecord[],
@@ -1044,8 +987,6 @@ export abstract class EvaluationToolService {
         name: sample.name,
         weight: sample.weight,
         weightedAvg,
-        // Crítica según el promedio que muestra la fila; una sección que nadie
-        // calificó vale 0 pero no es crítica.
         critical:
           this.strategy.isCritical(weightedAvg) &&
           values.some((s) => s.critical),
@@ -1065,8 +1006,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  // Evolución en el tiempo: una evaluación completada = un punto; se usa para
-  // el gráfico de tendencia y la diapositiva de evolución del reporte.
   async evaluationHistory(organisation: string, profileId: string) {
     const evaluations = await this.evaluations.findCompletedByProfile(
       organisation,
@@ -1090,7 +1029,6 @@ export abstract class EvaluationToolService {
       };
     });
   }
-  // ── Asistencia con IA ────────────────────────────────────────────────────
 
   async improveObservation(
     organisation: string,
@@ -1103,8 +1041,6 @@ export abstract class EvaluationToolService {
       organisation,
       evaluationId,
     );
-    // Lee el indicador de la plantilla (no de la respuesta): el KPI puede
-    // estar aún sin guardar mientras el usuario califica en el wizard.
     const indicator = evaluation.template.sections
       .flatMap((section) => section.indicators)
       .find((i) => i.id === indicatorId);
@@ -1134,7 +1070,6 @@ export abstract class EvaluationToolService {
     return result;
   }
 
-  // Una sola llamada por evaluación al intentar completarla.
   async detectInconsistencies(
     organisation: string,
     evaluationId: string,
@@ -1178,7 +1113,6 @@ export abstract class EvaluationToolService {
     };
   }
 
-  // Payload liviano: solo puntajes agregados y KPI críticos.
   async generateExecutiveNarrative(
     organisation: string,
     evaluationId: string,
@@ -1213,11 +1147,6 @@ export abstract class EvaluationToolService {
     return narrative;
   }
 
-  /**
-   * Contexto liviano para la IA: puntajes agregados e ítems críticos. Con la
-   * evaluación se agregan los KPI mejor y peor calificados de cada sección y
-   * los datos de la organización, que necesitan las fortalezas, brechas y FODA.
-   */
   protected buildAiReportContext(
     globalScore: number,
     sectionScores: SectionScoreResult[],
@@ -1277,10 +1206,6 @@ export abstract class EvaluationToolService {
     return context;
   }
 
-  // Análisis de IA para el reporte en diapositivas: insights (fortalezas,
-  // brechas, hallazgos) y, si la evaluación está completada, el FODA. Las dos
-  // llamadas van en paralelo; si una falla (rate limit, clave inválida,
-  // tiempo) el reporte se genera sin esas diapositivas.
   protected async tryGenerateReportInsights(
     organisation: string,
     evaluationId: string,

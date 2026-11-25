@@ -8,7 +8,6 @@ import {
 } from 'class-validator';
 
 export class CreateOrganisationDto {
-  /** Identificador en las URLs (`/:org/assessments/...`). No se puede cambiar después. */
   @IsString()
   @MinLength(3)
   @MaxLength(32)
@@ -23,7 +22,6 @@ export class CreateOrganisationDto {
   @MaxLength(120)
   name: string;
 
-  /** Si se omite, el superadministrador que la crea queda como administrador. */
   @IsOptional()
   @IsEmail()
   @MaxLength(255)
@@ -34,7 +32,6 @@ export class CreateOrganisationDto {
   @MaxLength(120)
   adminName?: string;
 
-  /** Obligatoria solo si el correo no corresponde a un usuario existente. */
   @IsOptional()
   @IsString()
   @MinLength(8)

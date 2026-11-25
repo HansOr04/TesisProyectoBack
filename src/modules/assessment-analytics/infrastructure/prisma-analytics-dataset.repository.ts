@@ -17,9 +17,6 @@ import {
   AnalyticsToolDataset,
 } from '../domain/analytics.types';
 
-// Adaptador Prisma → dataset neutro. Recalcula puntajes con la misma
-// estrategia ponderada de las herramientas para que la analítica sea
-// coherente con lo que ve el evaluador en cada resumen.
 @Injectable()
 export class PrismaAnalyticsDatasetRepository implements AnalyticsDatasetPort {
   private readonly strategy = new OrganizationalStrategy();
@@ -73,7 +70,6 @@ export class PrismaAnalyticsDatasetRepository implements AnalyticsDatasetPort {
       const toolEvaluations = evaluations.filter(
         (e) => e.template.tool === tool,
       );
-      // Estructura de referencia: la plantilla más reciente usada en el tenant.
       const referenceTemplate = toolEvaluations.length
         ? toolEvaluations[toolEvaluations.length - 1].template
         : await this.prisma.assessmentTemplate.findFirst({

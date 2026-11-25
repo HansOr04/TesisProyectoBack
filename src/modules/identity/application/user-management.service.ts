@@ -36,7 +36,6 @@ export interface OrganisationUserView {
     assignmentId: string;
     code: string;
     name: string;
-    /** Solo en el rol de visualizador: qué organizaciones evaluadas ve. */
     visibility?: ViewerVisibility;
   }[];
 }
@@ -46,9 +45,6 @@ interface Actor {
   isSuperAdmin: boolean;
 }
 
-// Alta y administración de usuarios de una organización. Un administrador
-// de evaluación (assessment_admin) gestiona usuarios y roles de su
-// organización; solo un superadmin global puede otorgar/quitar superadmin.
 @Injectable()
 export class UserManagementService {
   constructor(
@@ -123,15 +119,15 @@ export class UserManagementService {
           'Ese correo ya pertenece a esta organización',
         );
       }
-      // Asignar una cuenta existente no cambia su contraseña: si no, quien
-      // administra un proyecto podría quedarse con la cuenta de cualquiera.
       if (input.password) {
         throw new ConflictException(
           'Ese correo ya tiene una cuenta; asígnalo sin contraseña y conservará la suya',
         );
       }
       this.assertCanManageSuperAdmin(user, actor);
-      // Usuario existente en otra organización: se agrega como miembro.
+      if (!user.isActive || user.deletedAt) {
+        await this.assertCanManageAccount(organisation, user.id, actor);
+      }
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -186,18 +182,17 @@ export class UserManagementService {
         'Solo un superadministrador puede cambiar superadmin',
       );
     }
-    // El rol dentro del proyecto sí lo gestiona su administrador; la cuenta
-    // de un superadministrador (nombre, contraseña, activación) no.
-    if (
-      input.name !== undefined ||
-      input.password ||
-      input.isActive !== undefined
-    ) {
-      const target = await this.prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: { isSuperAdmin: true },
-      });
+    const target = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { isSuperAdmin: true, name: true, isActive: true },
+    });
+    const changesAccount =
+      Boolean(input.password) ||
+      (input.name !== undefined && input.name !== target.name) ||
+      (input.isActive !== undefined && input.isActive !== target.isActive);
+    if (changesAccount) {
       this.assertCanManageSuperAdmin(target, actor);
+      await this.assertCanManageAccount(organisation, userId, actor);
     }
     if (
       userId === actor.id &&
@@ -223,11 +218,26 @@ export class UserManagementService {
     if (input.roleCode !== undefined) {
       await this.replaceRole(organisation, userId, input.roleCode, actor.id);
     }
-    // Un usuario desactivado o con contraseña cambiada pierde sus sesiones.
     if (input.isActive === false || input.password) {
       await this.refreshTokens.revokeAllForUser(userId);
     }
     return this.getMember(organisation, userId);
+  }
+
+  private async assertCanManageAccount(
+    organisation: string,
+    userId: string,
+    actor: Actor,
+  ): Promise<void> {
+    if (actor.isSuperAdmin || actor.id === userId) return;
+    const elsewhere = await this.prisma.organisationMember.count({
+      where: { userId, organisationId: { not: organisation } },
+    });
+    if (elsewhere > 0) {
+      throw new ForbiddenException(
+        'Esta cuenta también pertenece a otro proyecto: solo un superadministrador puede cambiar su nombre, contraseña o estado',
+      );
+    }
   }
 
   private assertCanManageSuperAdmin(
@@ -261,11 +271,6 @@ export class UserManagementService {
     });
   }
 
-  /**
-   * Qué organizaciones evaluadas ve un visualizador: todas las del proyecto o
-   * una lista. Se guarda en su asignación de rol, así que solo aplica a
-   * quien tiene el rol de visualizador.
-   */
   async setViewerVisibility(
     organisation: string,
     userId: string,

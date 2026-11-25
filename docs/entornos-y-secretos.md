@@ -11,7 +11,7 @@ guarda en el repositorio.
 | Local | `localhost:5173` (Vite) | `localhost:3100` | PostgreSQL en Docker (`docker-compose.yml`, puerto 5434) con el seed de demostración | A mano |
 | Pruebas automáticas | Compilación en GitHub Actions | Jest y Supertest en GitHub Actions | PostgreSQL 15 desechable, creada y destruida en cada ejecución | En cada pull request a `develop` y a `main` |
 | Vista previa de la web | URL propia de Vercel por cada pull request (entorno *Preview*) | La API de la demo | La de la demo | En cada pull request del repositorio web |
-| **Demo desplegada (entorno de pruebas con la fundación)** | Vercel, entorno *Production* (`evaluar-ochre.vercel.app`) | Heroku, aplicación `evaluartesis` | Heroku Postgres (complemento de la aplicación) | Al integrar en `main`, solo con la integración continua en verde |
+| **Demo desplegada (entorno de pruebas con la fundación)** | Vercel, entorno *Production* (`evaluar-ochre.vercel.app`) | Heroku, aplicación `evaluartesis` | Heroku Postgres (complemento de la aplicación) | Al integrar en `main`, con la integración continua del pull request en verde |
 
 Flujo de un cambio: rama `feature/*` o `fix/*` → pull request a `develop`
 (pruebas automáticas) → pull request de versión a `main` (pruebas otra vez)
@@ -36,7 +36,7 @@ de ejemplo.
 | `CORS_ORIGIN` | No | URL de la web en Vercel. |
 | `NODE_ENV` | No | `production`. |
 | `PORT` | No | La define Heroku. |
-| `JWT_EXPIRES_IN`, `REFRESH_TOKEN_TTL_DAYS`, `ACTIVITY_LOG_RETENTION_MONTHS`, `AI_PROVIDER`, `GEMINI_MODEL`, `NVIDIA_MODEL`, `EXPORT_MAX_CONCURRENCY`, `EXPORT_MAX_QUEUED`, `SEED_ORGANISATION_ID`, `SEED_ORGANISATION_NAME`, `SEED_ADMIN_EMAIL` | No | Configuración; los valores por defecto están en `.env.example`. |
+| `JWT_EXPIRES_IN`, `REFRESH_TOKEN_TTL_DAYS`, `ACTIVITY_LOG_RETENTION_MONTHS`, `AI_PROVIDER`, `GEMINI_MODEL`, `SWAGGER_ENABLED`, `NVIDIA_MODEL`, `EXPORT_MAX_CONCURRENCY`, `EXPORT_MAX_QUEUED`, `SEED_ORGANISATION_ID`, `SEED_ORGANISATION_NAME`, `SEED_ADMIN_EMAIL` | No | Configuración; los valores por defecto están en `.env.example`. |
 
 ### Aplicación web — Vercel › Settings › Environment Variables
 

@@ -2,7 +2,6 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export const MAX_PAGE_SIZE = 200;
-/** Tope de filas cuando el cliente no pagina (compatibilidad con listados clásicos). */
 export const MAX_UNPAGED_ROWS = 500;
 
 export class PaginationQueryDto {
@@ -28,7 +27,6 @@ export interface Paginated<T> {
   pages: number;
 }
 
-/** Argumentos Prisma (`skip`/`take`) para una consulta paginada o acotada. */
 export function pageArgs(query: PaginationQueryDto): {
   skip: number;
   take: number;
@@ -37,10 +35,6 @@ export function pageArgs(query: PaginationQueryDto): {
   return { skip: (query.page - 1) * query.limit, take: query.limit };
 }
 
-/**
- * Devuelve el sobre paginado cuando el cliente pidió `page`; si no, la lista
- * plana (acotada) para no romper a los consumidores que esperan un array.
- */
 export function pageResult<T>(
   query: PaginationQueryDto,
   items: T[],

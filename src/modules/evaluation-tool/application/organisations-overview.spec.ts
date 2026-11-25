@@ -26,8 +26,6 @@ const profile = (id: string, extra: AnyRecord = {}) => ({
   parentProfileId: null,
   ...extra,
 });
-
-/** Una sección por nota; null = sección sin calificar. Todos sus KPI iguales. */
 function evaluationOf(
   profileId: string,
   scores: (number | null)[],
@@ -145,8 +143,6 @@ describe('organisationsOverview: críticos del panel', () => {
       );
 
       const overview = await create().organisationsOverview(ORG);
-
-      // 4 secciones con promedio <= 5, aunque sean 40 KPI críticos.
       expect(overview.totalCritical).toBe(4);
       expect(overview.organisations.map((o) => o.criticalCount)).toEqual([
         3, 1,
@@ -211,11 +207,7 @@ describe('organisationsOverview: críticos del panel', () => {
       });
       givenData(
         [association],
-        [
-          // Promedios por sección: 4, 7 y 2 (la última sin nota en un miembro).
-          evaluationOf('m1', [3, 5, 4]),
-          evaluationOf('m2', [5, 9, null]),
-        ],
+        [evaluationOf('m1', [3, 5, 4]), evaluationOf('m2', [5, 9, null])],
         [
           profile('m1', { parentProfileId: 'a1' }),
           profile('m2', { parentProfileId: 'a1' }),

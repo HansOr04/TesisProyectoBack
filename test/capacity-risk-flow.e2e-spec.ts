@@ -16,15 +16,11 @@ import {
 
 jest.setTimeout(60 * 1000);
 
-// HU-50: las herramientas de capacidades y de riesgos cumplen el mismo camino
-// principal que la organizativa (CA-50.1) y los riesgos se clasifican con y
-// sin umbral propio del país (CA-50.2).
 describe('Capacity and risk tool flows (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let token: string;
   const profileIds: string[] = [];
-  // Países ficticios para no tocar la configuración real de EC.
   const COUNTRY_WITH_PARAM = 'ZZ';
   const COUNTRY_WITHOUT_PARAM = 'ZY';
 
@@ -143,10 +139,8 @@ describe('Capacity and risk tool flows (e2e)', () => {
       ).class;
     }
 
-    // Con umbral propio del país (7): una nota de 6 no lo supera.
     expect(await classify(COUNTRY_WITH_PARAM, 6)).toBe('NON_NEGLIGIBLE');
     expect(await classify(COUNTRY_WITH_PARAM, 8)).toBe('NEGLIGIBLE');
-    // Sin umbral del país se usa el de la plantilla (5): una nota de 6 lo supera.
     expect(await classify(COUNTRY_WITHOUT_PARAM, 6)).toBe('NEGLIGIBLE');
     expect(await classify(COUNTRY_WITHOUT_PARAM, 5)).toBe('NON_NEGLIGIBLE');
   });

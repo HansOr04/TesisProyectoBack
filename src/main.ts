@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/infrastructure/http/all-exceptions.filter';
+import { ServerErrorMonitor } from './shared/infrastructure/logging/server-error-monitor.service';
 import { StructuredLoggerService } from './shared/infrastructure/logging/structured-logger.service';
 
 async function bootstrap(): Promise<void> {
@@ -18,11 +19,6 @@ async function bootstrap(): Promise<void> {
   });
   const config = app.get(ConfigService);
 
-  // Heroku atiende detrás de un enrutador que agrega X-Forwarded-For. Sin
-  // confiar en ese primer salto, req.ip era la del enrutador y los límites por
-  // IP (300 peticiones y 10 inicios de sesión por minuto) se compartían entre
-  // todos los usuarios de la plataforma: un taller podía quedarse sin poder
-  // iniciar sesión.
   app.set('trust proxy', 1);
 
   app.use(helmet());
@@ -31,18 +27,33 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: config.get<string>('CORS_ORIGIN')?.split(',') ?? '*',
     credentials: true,
-    // Sin esto el navegador repite el preflight OPTIONS antes de cada
-    // PUT/POST, un viaje de red extra por guardado. 7200 s es el tope de Chrome.
     maxAge: 7200,
   });
   app.useGlobalFilters(
-    new AllExceptionsFilter(await app.resolve(StructuredLoggerService)),
+    new AllExceptionsFilter(
+      await app.resolve(StructuredLoggerService),
+      app.get(ServerErrorMonitor),
+    ),
   );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  // Socket.IO para AssessmentSessionGateway (NestFactory no lo enlaza solo)
   app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
+  const swaggerEnabled =
+    config.get('NODE_ENV') !== 'production' ||
+    config.get('SWAGGER_ENABLED') === 'true';
+  if (swaggerEnabled) setupSwagger(app);
+
+  const port = config.get<number>('PORT') ?? 3100;
+  await app.listen(port);
+  const logger = await app.resolve(StructuredLoggerService);
+  logger.setContext({ service: 'Bootstrap' });
+  logger.info(
+    `API listening on http://localhost:${port}${swaggerEnabled ? ' (docs: /api/docs)' : ''}`,
+  );
+}
+
+function setupSwagger(app: NestExpressApplication): void {
   const swagger = new DocumentBuilder()
     .setTitle('Assessment API')
     .setDescription(
@@ -56,12 +67,6 @@ async function bootstrap(): Promise<void> {
     app,
     SwaggerModule.createDocument(app, swagger),
   );
-
-  const port = config.get<number>('PORT') ?? 3100;
-  await app.listen(port);
-  const logger = await app.resolve(StructuredLoggerService);
-  logger.setContext({ service: 'Bootstrap' });
-  logger.info(`API listening on http://localhost:${port} (docs: /api/docs)`);
 }
 
 void bootstrap();

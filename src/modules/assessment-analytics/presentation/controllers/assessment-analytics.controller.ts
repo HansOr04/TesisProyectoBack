@@ -22,8 +22,6 @@ import {
   ToolQueryDto,
 } from '../dto/analytics-query.dto';
 
-// Analítica transversal de las 3 herramientas. Misma regla de alcance que el
-// dashboard: un evaluador solo analiza las organizaciones que tiene asignadas.
 @ApiTags('Analítica')
 @ApiBearerAuth()
 @Controller()

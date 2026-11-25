@@ -15,8 +15,6 @@ import {
 
 jest.setTimeout(60 * 1000);
 
-// HU-49: camino principal de la herramienta organizativa (CA-49.1) y sus
-// rechazos (CA-49.2), contra una base de datos real.
 describe('Organizational tool flow (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -40,7 +38,6 @@ describe('Organizational tool flow (e2e)', () => {
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
 
   it('creates, scores, completes and summarises an evaluation; rejects missing KPI (422) and scoring a completed one (409)', async () => {
-    // Crear
     const created = await auth(
       http().post(`${base}/evaluations`).send({ profileId: profileIds[0] }),
     ).expect(201);
@@ -49,13 +46,11 @@ describe('Organizational tool flow (e2e)', () => {
     const indicators = applicableIndicators(evaluation);
     expect(indicators).toHaveLength(73);
 
-    // Crear de nuevo devuelve la misma evaluación abierta, no un duplicado
     const again = await auth(
       http().post(`${base}/evaluations`).send({ profileId: profileIds[0] }),
     ).expect(201);
     expect(again.body.id).toBe(evaluation.id);
 
-    // Calificar la mitad
     const half = indicators.slice(0, 36);
     const firstBatch = await auth(
       http()
@@ -64,7 +59,6 @@ describe('Organizational tool flow (e2e)', () => {
     ).expect(200);
     expect(firstBatch.body.status).toBe('IN_PROGRESS');
 
-    // CA-49.2: completar con indicadores sin calificar responde 422 y los lista
     const incomplete = await auth(
       http().post(`${base}/evaluations/${evaluation.id}/complete`),
     ).expect(422);
@@ -72,7 +66,6 @@ describe('Organizational tool flow (e2e)', () => {
       indicators.length - half.length,
     );
 
-    // Calificar el resto y completar
     const rest = indicators.slice(36);
     await auth(
       http()
@@ -84,7 +77,6 @@ describe('Organizational tool flow (e2e)', () => {
     ).expect(201);
     expect(completed.body.status).toBe('COMPLETED');
 
-    // Consultar el resumen: puntajes y críticos iguales al cálculo de referencia
     const scores = new Map(indicators.map((ind, i) => [ind.id, scoreFor(i)]));
     const expected = expectedScores(evaluation, scores);
     const summary = await auth(
@@ -108,7 +100,6 @@ describe('Organizational tool flow (e2e)', () => {
         .sort(),
     ).toEqual(expectedCritical);
 
-    // CA-49.2: calificar una evaluación completada responde 409
     await auth(
       http()
         .put(`${base}/evaluations/${evaluation.id}/responses`)

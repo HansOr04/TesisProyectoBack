@@ -22,22 +22,10 @@ import {
   countryName,
 } from '../domain/evaluation-tool-ai.types';
 
-// Asistencia de IA común a las herramientas: mejorar redacción de observaciones,
-// sugerir medidas para KPI críticos, detectar inconsistencias, narrativa
-// ejecutiva e insights para el reporte. Diseñada para bajo consumo de tokens y
-// sin alucinaciones — los prompts obligan al modelo a basarse únicamente en los
-// datos que se le pasan. Cada herramienta aporta solo su contexto de dominio
-// (AiDomainContext); la selección de proveedor, la llamada HTTP y el circuit
-// breaker viven en AssessmentLlmClientService.
-
 export interface AiDomainContext {
-  /** "fortalecimiento organizativo", "capacidades de cumplimiento normativo"… */
   domain: string;
-  /** Nombre de la sección en minúsculas: "dimensión", "área", "principio". */
   sectionLabel: string;
-  /** Plural: "dimensiones", "áreas", "principios". */
   sectionLabelPlural: string;
-  /** Etiqueta de registro: "Organizational", "Capacity", "Risk". */
   logLabel: string;
 }
 
@@ -53,7 +41,6 @@ const NARRATIVE_TONE_INSTRUCTIONS: Record<NarrativeTone, string> = {
     'Usa un tono formal orientado a compradores y operadores que requieren documentación de debida diligencia.',
 };
 
-/** true si la respuesta se puede leer (para no guardar en caché una rota). */
 function readable(parse: () => unknown): boolean {
   try {
     parse();
@@ -63,7 +50,6 @@ function readable(parse: () => unknown): boolean {
   }
 }
 
-/** Consumo de una llamada, para el registro. */
 function usageOf(result: AiCompletionResult) {
   return {
     cached: !!result.cached,
@@ -78,6 +64,9 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+const REPORT_AI_BUDGET_MS = 8_000;
+const MIN_ATTEMPT_MS = 2_000;
+
 @Injectable()
 export class EvaluationToolAiService {
   constructor(
@@ -87,8 +76,6 @@ export class EvaluationToolAiService {
   ) {
     this.logger?.setContext({ service: `${context.logLabel}ToolAiService` });
   }
-
-  // ── Prompts de sistema (parametrizados por dominio) ──────────────────────
 
   protected get improveObservationPrompt(): string {
     return `Eres un asistente que mejora la redacción de observaciones de auditoría en español, para evaluaciones de ${this.context.domain} de asociaciones de productores.
@@ -147,10 +134,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
 {"strengths": ["..."], "weaknesses": ["..."], "opportunities": ["..."], "threats": ["..."]}`;
   }
 
-  // ── Capacidades ──────────────────────────────────────────────────────────
-
-  // Ahorro de tokens: una sola llamada sin historial, system prompt corto y
-  // fijo, solo el KPI puntual (no el resto de la evaluación) y temperature baja.
   async improveObservation(
     indicator: AiIndicatorContext,
     score: number,
@@ -165,8 +148,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       .filter(Boolean)
       .join('\n');
 
-    // 1500 (no 200) porque el alias "flash" de Gemini razona internamente antes
-    // de escribir la respuesta visible y esos tokens cuentan contra este tope.
     const result = await this.llmClient.complete(
       this.improveObservationPrompt,
       userPrompt,
@@ -177,8 +158,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     return { improved: result.text.trim() };
   }
 
-  // Ahorro de tokens: se llama con los KPI críticos de UNA sola sección a la
-  // vez — nunca con todos los KPI críticos de la evaluación completa.
   async suggestMeasuresForSection(
     sectionName: string,
     criticalItems: AiCriticalItem[],
@@ -196,7 +175,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       ),
     ].join('\n');
 
-    // Base de 1200 para el razonamiento interno de Gemini + 300 por ítem.
     const maxOutputTokens = Math.min(1200 + 300 * criticalItems.length, 5000);
     const result = await this.llmClient.complete(
       this.suggestMeasuresPrompt,
@@ -215,8 +193,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     );
   }
 
-  // Una sola llamada por evaluación, solo al intentar completarla. La
-  // observación se trunca para acotar tokens de entrada.
   async detectInconsistencies(
     items: AiEvaluatedItem[],
   ): Promise<AiInconsistencyFinding[]> {
@@ -247,8 +223,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     );
   }
 
-  // Payload liviano (solo puntajes agregados y KPI críticos, nunca las
-  // observaciones completas); la instrucción de tono va en el userPrompt.
   async generateExecutiveNarrative(
     context: AiReportContext,
     tone: NarrativeTone,
@@ -264,7 +238,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
       1200,
       0.4,
       undefined,
-      // Texto corto a partir de puntajes: no necesita el modelo que razona.
       { fast: true },
     );
     this.log('executive narrative generated', {
@@ -274,19 +247,14 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     return { narrative: result.text.trim() };
   }
 
-  // Análisis de calidad para el reporte PPTX — una sola llamada por export.
   async generateReportInsights(
     context: AiReportContext,
   ): Promise<AiReportInsights> {
     const sectionNumbers = context.sectionScores.map((s) => String(s.number));
     const userPrompt = [
-      // Los KPI críticos van como conteo: los más bajos de cada sección ya
-      // aparecen en el detalle, con nombre y observación.
       ...this.describeReportContext(context, 'pct', false),
       ...this.describeSectionDetails(context),
     ].join('\n');
-    // Límite holgado (solo se cobra lo que se genera): si se queda corto, el
-    // JSON sale cortado y el reporte pierde el análisis.
     const maxOutputTokens = Math.min(
       1800 + 300 * context.sectionScores.length,
       4500,
@@ -301,11 +269,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     );
   }
 
-  // FODA para el reporte de una evaluación completada. Corre en paralelo con
-  // los insights y con el mismo límite de tiempo.
   async generateSwot(context: AiReportContext): Promise<AiSwot> {
-    // El FODA necesita menos detalle que el análisis: puntajes por sección y
-    // los nombres de los KPI extremos, sin observaciones.
     const userPrompt = [
       ...this.describeProfile(context),
       ...this.describeReportContext(context, 'pct', false),
@@ -321,12 +285,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     );
   }
 
-  /**
-   * Llamada de reporte: modelo rápido, modo JSON y caché. Si la respuesta
-   * llega cortada (el modelo a veces termina antes de cerrar el JSON), se
-   * reintenta una vez; nunca se guarda en caché una respuesta ilegible.
-   * Ambos intentos caben en los 15 s del export.
-   */
   private async completeReportJson<T>(
     capability: string,
     systemPrompt: string,
@@ -338,12 +296,14 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     const started = Date.now();
     let lastError: unknown;
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const remaining = REPORT_AI_BUDGET_MS - (Date.now() - started);
+      if (attempt > 1 && remaining < MIN_ATTEMPT_MS) break;
       const result = await this.llmClient.complete(
         systemPrompt,
         userPrompt,
         maxOutputTokens,
         temperature,
-        Math.max(3_000, 15_000 - (Date.now() - started)),
+        remaining,
         {
           fast: true,
           cache: true,
@@ -389,10 +349,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     ]);
   }
 
-  /**
-   * Puntajes para el prompt. El reporte se presenta en porcentaje (`pct`), así
-   * que sus análisis reciben los datos en esa escala para citarlos igual.
-   */
   protected describeReportContext(
     context: AiReportContext,
     scale: 'score' | 'pct' = 'score',
@@ -416,7 +372,6 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional antes o 
     ];
   }
 
-  /** Si la respuesta no se puede leer, deja rastro (largo y final) y relanza. */
   protected parseOrWarn<T>(
     capability: string,
     text: string,

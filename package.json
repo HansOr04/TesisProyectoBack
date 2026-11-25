@@ -18,6 +18,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test,prisma}/**/*.ts\"",
+    "comentarios": "node scripts/comentarios.cjs",
     "lint:fix": "eslint \"{src,test,prisma}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\"",
     "test": "jest",
@@ -70,8 +71,8 @@
     "typescript": "^5.7.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.4.9",
-    "@nestjs/schematics": "^10.2.3",
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^10.4.15",
     "@stryker-mutator/core": "^8.7.1",
     "@stryker-mutator/jest-runner": "^8.7.1",
@@ -126,6 +127,9 @@
     "lodash": "^4.18.1",
     "multer": "^2.5.0",
     "qs": "^6.16.2",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "handlebars": "^4.7.10",
+    "picomatch@^4": "^4.0.4",
+    "tmp": "^0.2.7"
   }
 }

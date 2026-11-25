@@ -1,8 +1,3 @@
-// Tipos de dominio de las herramientas de evaluación. Son estructurales (sin
-// dependencia del ORM): los adaptadores Prisma devuelven objetos que los
-// satisfacen tal cual, y la capa de aplicación solo conoce estas formas.
-
-/** Compatible con number y con Prisma.Decimal (Number(x) funciona en ambos). */
 export type NumericLike = number | string | { toString(): string };
 
 export type EvaluationStatus =
@@ -159,7 +154,6 @@ export interface OrganisationOverviewRow {
   status: string | null;
   globalScore: number | null;
   sectionScores: SectionScoreResult[];
-  /** Secciones críticas; en Riesgos, riesgos no despreciables sin medida. */
   criticalCount: number;
   isConsolidated: boolean;
 }

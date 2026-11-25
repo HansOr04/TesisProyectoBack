@@ -2,24 +2,6 @@ import { AssessmentSeedTemplate } from './types';
 
 const CODE_PREFIX = 'KPI';
 
-// KPI reales de la Herramienta de Capacidades (Análisis de Capacidades), transcritos del Excel
-// original de la herramienta (nombre, cálculo del indicador y peso exactos, tal como los pasó el
-// usuario desde su hoja de cálculo fuente). Al igual que Organizational (73 KPI) y Risk (46 KPI), este
-// contenido es real, no genérico: 30 KPI reales (11+6+9+4) con su peso real de ponderación dentro
-// de cada sección (no 65 como estimaba la documentación de arquitectura antes de validar contra
-// el Excel).
-//
-// helpText: instructivo detallado por KPI — nombre exacto del/los documento(s) requerido(s), qué
-// campos debe tener cada uno, quién lo firma/llena, formato esperado, y dónde verificarlo. No usa
-// sintaxis markdown (el texto se renderiza en un <p> plano con whitespace-pre-line, así que el
-// formato es solo saltos de línea + numeración/guiones).
-// scoringRubric: rúbrica de 5 bandas ESPECÍFICA de ese KPI (no genérica), con criterios concretos
-// por puntaje. Ambos grounded en el marco normativo de debida diligencia aplicable — DDS vía TRACES, corte de no
-// deforestación 31/12/2020, geolocalización obligatoria por parcela (Art. 9) — y el marco legal
-// ecuatoriano aplicable: Certificado de No Afectación (MAATE, Sistema SAF), licencias de
-// aprovechamiento forestal (MAATE/MAG), Código Orgánico del Ambiente (COA), Código de Trabajo,
-// IESS, SRI y registro de trazabilidad de productores (Agrocalidad/MAG, Sistema SAC).
-
 interface IndicatorSeed {
   name: string;
   description: string;

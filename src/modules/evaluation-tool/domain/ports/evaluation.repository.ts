@@ -15,7 +15,6 @@ export interface ResponseInput {
   indicatorId: string;
   score: number;
   observation: string;
-  /** El evaluador lo marca "requiere atención" a mano, sin importar el score. */
   manualCritical?: boolean;
 }
 
@@ -50,7 +49,6 @@ export interface EvaluationRepository {
     profileId: string;
     startedBy: string;
   }): Promise<EvaluationRecord>;
-  /** `profileScope` recorta a las organizaciones que el usuario puede ver. */
   list(
     organisation: string,
     tool: AssessmentToolCode,
@@ -62,7 +60,6 @@ export interface EvaluationRepository {
     tool: AssessmentToolCode,
     evaluationId: string,
   ): Promise<EvaluationWithStructure | null>;
-  /** Todas las evaluaciones (más reciente primero) de los perfiles indicados. */
   findByProfiles(
     organisation: string,
     tool: AssessmentToolCode,

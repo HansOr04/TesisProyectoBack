@@ -183,7 +183,6 @@ describe('AssessmentRolesService (F2-B03)', () => {
 
       expect(result.assignments).toEqual([{ id: 'ur-1' }]);
       expect(result.activityLogs).toEqual([{ id: 'log-1' }]);
-      // El historial incluye revocaciones: no debe filtrar por deletedAt.
       const call = prisma.authUserRole.findMany.mock.calls[0][0];
       expect(call.where).not.toHaveProperty('deletedAt');
     });

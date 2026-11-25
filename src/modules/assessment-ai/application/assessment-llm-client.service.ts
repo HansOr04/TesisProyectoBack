@@ -17,20 +17,10 @@ import { createAiProviderFromEnv } from '../infrastructure/ai-provider.factory';
 
 export type { AiCompletionResult } from '../domain/ports/ai-provider.port';
 
-// Heroku corta toda petición HTTP a los 30 s (H12). La llamada al proveedor
-// debe rendirse antes para que el endpoint responda con un error claro (o
-// con su fallback) en vez de quedar colgado hasta que el router lo mate.
 export const DEFAULT_AI_TIMEOUT_MS = 25_000;
 
-/** Las respuestas guardadas se reutilizan hasta 90 días. */
 export const AI_CACHE_TTL_DAYS = 90;
 
-// Módulo de IA compartido: un solo punto de selección de proveedor
-// (Gemini/NVIDIA vía AI_PROVIDER), llamada HTTP y circuit breaker,
-// usado por Organizativa/Capacidades/Riesgos en vez de triplicar esta lógica — cada
-// herramienta solo aporta sus propios prompts de dominio. Un solo circuit
-// breaker también significa que si el proveedor cae, las 3 herramientas lo
-// ven caído de inmediato.
 @Injectable()
 export class AssessmentLlmClientService {
   private readonly provider: AiProvider;
@@ -44,14 +34,14 @@ export class AssessmentLlmClientService {
     @Optional() private readonly prisma?: PrismaService,
   ) {
     this.logger?.setContext({ service: 'AssessmentLlmClientService' });
-    const { provider, missingApiKey, apiKeyEnvVar } =
+    const { provider, missingApiKey, requiredVariable } =
       createAiProviderFromEnv(httpService);
     this.provider = provider;
     this.providerName = provider.name;
     if (missingApiKey) {
-      this.missingApiKeyVar = apiKeyEnvVar;
+      this.missingApiKeyVar = requiredVariable;
       this.logger?.warn(
-        `${apiKeyEnvVar} is not set — Assessment AI features will fail until configured`,
+        `${requiredVariable} is not set — Assessment AI features will fail until configured`,
       );
     }
     this.logger?.info(`Assessment AI provider active: ${this.providerName}`);
@@ -65,7 +55,6 @@ export class AssessmentLlmClientService {
     timeoutMs: number = DEFAULT_AI_TIMEOUT_MS,
     options?: AiCompletionOptions,
   ): Promise<AiCompletionResult> {
-    // Sin credencial no tiene sentido salir a la red: se responde 503 de inmediato.
     if (this.missingApiKeyVar) {
       throw new ServiceUnavailableException(
         `AI provider (${this.providerName}) is not configured: ${this.missingApiKeyVar} is not set.`,
@@ -124,8 +113,6 @@ export class AssessmentLlmClientService {
     }
   }
 
-  // ── Caché de respuestas ──────────────────────────────────────────────────
-
   private cacheKey(
     systemPrompt: string,
     userPrompt: string,
@@ -160,7 +147,6 @@ export class AssessmentLlmClientService {
       });
       return { text: row.text, tokensUsed: 0, cached: true };
     } catch {
-      // Sin caché (tabla no migrada, base caída): se llama al proveedor.
       return null;
     }
   }
@@ -184,7 +170,6 @@ export class AssessmentLlmClientService {
         create: { key, ...data },
         update: data,
       });
-      // Limpieza barata de lo vencido, para que la tabla no crezca sin fin.
       await this.prisma.assessmentAiCache.deleteMany({
         where: {
           createdAt: {

@@ -1,6 +1,3 @@
-# Análisis estático de seguridad del código (CodeQL): busca inyecciones,
-# secretos expuestos, rutas inseguras y otros patrones vulnerables. Corre en
-# paralelo con el CI en cada pull request y una vez por semana sobre main.
 name: CodeQL
 
 on:

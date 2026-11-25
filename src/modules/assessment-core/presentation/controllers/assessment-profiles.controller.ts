@@ -78,9 +78,6 @@ export class AssessmentProfilesController {
     return this.profilesService.getAssociationOverview(org, id, scope);
   }
 
-  // Plan de acción consolidado de la organización: medidas de las tres
-  // herramientas juntas. Pasa por get() para respetar el alcance del
-  // evaluador (solo sus organizaciones asignadas).
   @Get(':org/assessments/profiles/:id/action-plan')
   @RequireAssessmentPermission('assessment-core', 'read')
   @ScopedTo('profile')
@@ -100,8 +97,6 @@ export class AssessmentProfilesController {
     @Body() dto: CreateAssessmentProfileDto,
   ) {
     const user = await this.requestContext.getCurrentUser();
-    // Lo que da de alta un evaluador queda a su cargo: sin evaluador asignado
-    // la organización desaparecía de su lista apenas la creaba.
     const scope = await this.resolveScope(org);
     const owned = scope.evaluatorId
       ? { ...dto, evaluatorId: scope.evaluatorId }
@@ -117,8 +112,6 @@ export class AssessmentProfilesController {
     @Param('id') id: string,
     @Body() dto: UpdateAssessmentProfileDto,
   ) {
-    // Elegir el evaluador responsable es del administrador: un evaluador que
-    // cambia evaluatorId se asignaría organizaciones ajenas a sí mismo.
     const scope = await this.resolveScope(org);
     if (scope.evaluatorId && dto.evaluatorId !== undefined) {
       throw new ForbiddenException(

@@ -6,14 +6,15 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ServerErrorMonitor } from '../logging/server-error-monitor.service';
 import { StructuredLoggerService } from '../logging/structured-logger.service';
 
-// Respuesta de error uniforme: statusCode, message, requestId y timestamp.
-// Los errores no controlados (500) se registran con stack y, en producción,
-// no exponen detalles internos al cliente.
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  constructor(private readonly logger: StructuredLoggerService) {
+  constructor(
+    private readonly logger: StructuredLoggerService,
+    private readonly errors: ServerErrorMonitor,
+  ) {
     this.logger.setContext({ service: 'HttpExceptions' });
   }
 
@@ -34,11 +35,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
             ? 'Error interno del servidor'
             : (exception as Error)?.message));
 
+    if (status === HttpStatus.INTERNAL_SERVER_ERROR) this.errors.record();
     if (status >= 500) {
       this.logger.error('Unhandled exception', exception, {
         requestId: request.requestId,
         method: request.method,
-        url: request.originalUrl,
+        path: request.originalUrl.split('?')[0],
       });
     }
 

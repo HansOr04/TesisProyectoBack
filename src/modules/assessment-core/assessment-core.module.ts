@@ -18,10 +18,6 @@ import { AssessmentAiThrottlerGuard } from './presentation/guards/assessment-ai-
 import { AssessmentPermissionGuard } from './presentation/guards/assessment-permission.guard';
 import { AssessmentScopeGuard } from './presentation/guards/assessment-scope.guard';
 
-// Núcleo compartido: perfiles de organización evaluada, aplicabilidad,
-// roles Assessment, dashboard consolidado y auditoría. Los módulos de
-// herramienta (Organizativa/Capacidades/Riesgos) importan este módulo para reutilizar
-// audit/applicability/access-scope y los guards.
 @Module({
   imports: [AssessmentSessionModule],
   controllers: [

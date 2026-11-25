@@ -61,3 +61,8 @@ heroku run npm run prisma:seed:prod
 
 Entornos, dónde vive cada variable y reglas para los secretos: [`docs/entornos-y-secretos.md`](docs/entornos-y-secretos.md).
 Respaldos diarios de la base y cómo restaurarlos: [`docs/respaldos.md`](docs/respaldos.md).
+
+## Documentación
+
+Todo está en **[docs/](docs/README.md)**: arquitectura, base de datos, API, reglas, IA,
+cómo expandir, decisiones, referencia del código, despliegue y operación.

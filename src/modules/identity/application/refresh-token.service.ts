@@ -4,15 +4,12 @@ import { createHash, randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../../../shared/infrastructure/database/prisma.service';
 
 export interface IssuedRefreshToken {
-  /** Valor opaco que viaja en la cookie HttpOnly (nunca se persiste en claro). */
   token: string;
   expiresAt: Date;
 }
 
-// Refresh tokens rotatorios: cada uso emite uno nuevo y revoca el anterior.
-// Si alguien presenta un token ya rotado (robo de cookie), se revoca toda la
-// familia y la sesión legítima también cae — el usuario vuelve a iniciar
-// sesión, el atacante pierde el acceso.
+export const ROTATION_GRACE_MS = 30 * 1000;
+
 @Injectable()
 export class RefreshTokenService {
   private readonly ttlMs: number;
@@ -37,10 +34,11 @@ export class RefreshTokenService {
     userId: string,
     userAgent?: string,
     familyId: string = randomUUID(),
+    client: Pick<PrismaService, 'refreshToken'> = this.prisma,
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.ttlMs);
-    await this.prisma.refreshToken.create({
+    await client.refreshToken.create({
       data: {
         userId,
         tokenHash: this.hash(token),
@@ -52,7 +50,6 @@ export class RefreshTokenService {
     return { token, expiresAt };
   }
 
-  /** Valida y rota: devuelve el usuario y el nuevo token. */
   async rotate(
     rawToken: string,
     userAgent?: string,
@@ -63,34 +60,61 @@ export class RefreshTokenService {
     if (!stored) {
       throw new UnauthorizedException('Sesión inválida');
     }
-    if (stored.revokedAt) {
-      // Reuso de un token ya rotado: se revoca toda la familia.
-      await this.prisma.refreshToken.updateMany({
-        where: { familyId: stored.familyId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      throw new UnauthorizedException('Sesión inválida');
-    }
     if (stored.expiresAt.getTime() <= Date.now()) {
       throw new UnauthorizedException('Sesión expirada');
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    const issued = stored.revokedAt
+      ? null
+      : await this.prisma.$transaction(async (tx) => {
+          const rotated = await tx.refreshToken.updateMany({
+            where: { id: stored.id, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+          return rotated.count === 1
+            ? this.issue(stored.userId, userAgent, stored.familyId, tx)
+            : null;
+        });
+    if (issued) return { userId: stored.userId, issued };
+
+    if (!(await this.isConcurrentRotation(stored.familyId, stored.revokedAt))) {
+      await this.revokeFamily(stored.familyId);
+      throw new UnauthorizedException('Sesión inválida');
+    }
+    return {
+      userId: stored.userId,
+      issued: await this.issue(stored.userId, userAgent, stored.familyId),
+    };
+  }
+
+  private async isConcurrentRotation(
+    familyId: string,
+    revokedAt: Date | null,
+  ): Promise<boolean> {
+    if (revokedAt && Date.now() - revokedAt.getTime() > ROTATION_GRACE_MS) {
+      return false;
+    }
+    const active = await this.prisma.refreshToken.count({
+      where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } },
+    });
+    return active > 0;
+  }
+
+  private async revokeFamily(familyId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { familyId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    const issued = await this.issue(stored.userId, userAgent, stored.familyId);
-    return { userId: stored.userId, issued };
   }
 
   async revoke(rawToken: string): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
-      where: { tokenHash: this.hash(rawToken), revokedAt: null },
-      data: { revokedAt: new Date() },
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: this.hash(rawToken) },
+      select: { familyId: true },
     });
+    if (stored) await this.revokeFamily(stored.familyId);
   }
 
-  /** Cierra todas las sesiones de un usuario (desactivación, baja). */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
@@ -98,7 +122,6 @@ export class RefreshTokenService {
     });
   }
 
-  /** Limpieza de tokens vencidos/revocados con más de 30 días. */
   async purgeExpired(): Promise<number> {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const result = await this.prisma.refreshToken.deleteMany({

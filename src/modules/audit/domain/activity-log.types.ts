@@ -29,5 +29,4 @@ export interface ActivityLogInput {
   userAgent?: string;
 }
 
-/** Usuario técnico al que se atribuyen acciones sin autor (seeds, jobs). */
 export const SYSTEM_USER_ID = 'system';

@@ -72,21 +72,12 @@ export type UpdateRiskMeasureInput = Omit<
   'status' | 'updatedBy'
 >;
 
-// AiRiskItem lleva solo lo que necesita el prompt; riskId liga la sugerencia
-// de vuelta a su riesgo al crear la medida y weight/threshold permiten calcular
-// la prioridad de impacto sin otra consulta.
 interface RiskItemWithId extends AiRiskItem {
   riskId: string;
   weight: number;
   threshold: number;
 }
 
-/**
- * Herramienta de Riesgos: el flujo común (plantilla, evaluación, puntuación,
- * panel, historial) viene de EvaluationToolService; acá se añade la
- * clasificación de riesgos por umbral (configurable por país), el plan de
- * mitigación con Gantt, sus exportes y las sugerencias de IA por riesgo.
- */
 @Injectable()
 export class RiskToolService extends EvaluationToolService {
   constructor(
@@ -114,11 +105,6 @@ export class RiskToolService extends EvaluationToolService {
     return this.strategy as RiskStrategy;
   }
 
-  /**
-   * El país de la organización evaluada determina el umbral de
-   * despreciabilidad efectivo: parámetro por país (BD, configurable desde
-   * administración) ?? umbral de la plantilla ?? 5.
-   */
   private async resolveRiskThreshold(
     organisation: string,
     country: string,
@@ -131,8 +117,6 @@ export class RiskToolService extends EvaluationToolService {
     if (override !== null) return override;
     return templateRiskThreshold !== null ? Number(templateRiskThreshold) : 5;
   }
-
-  // ── Parámetros de riesgo por país (administración) ───────────────────────
 
   listCountryParams(organisation: string) {
     return this.risks.listCountryParams(organisation);
@@ -173,9 +157,6 @@ export class RiskToolService extends EvaluationToolService {
     );
   }
 
-  // ── Ganchos del flujo común ──────────────────────────────────────────────
-
-  // Mismo flujo que la base; se redeclara solo para exigir riskDescription.
   override upsertResponses(
     organisation: string,
     evaluationId: string,
@@ -185,7 +166,6 @@ export class RiskToolService extends EvaluationToolService {
     return super.upsertResponses(organisation, evaluationId, dto, actorId);
   }
 
-  // Respuestas y riesgos clasificados se guardan en la misma transacción.
   protected async persistResponses(
     evaluation: EvaluationWithStructure,
     dto: ScoreKpiRiskInput,
@@ -214,7 +194,6 @@ export class RiskToolService extends EvaluationToolService {
     );
   }
 
-  // Críticos del panel = riesgos NON_NEGLIGIBLE sin medida de mitigación.
   protected countCriticalByEvaluation(
     evaluations: EvaluationWithStructure[],
   ): Promise<Map<string, number>> {
@@ -230,8 +209,6 @@ export class RiskToolService extends EvaluationToolService {
     return this.risks.countMeasuresByEvaluations(evaluationIds);
   }
 
-  // ── Riesgos y plan de mitigación ─────────────────────────────────────────
-
   async listRisks(organisation: string, evaluationId: string) {
     await this.getEvaluationOrThrow(organisation, evaluationId);
     return this.risks.listByEvaluation(evaluationId);
@@ -245,8 +222,6 @@ export class RiskToolService extends EvaluationToolService {
     return risk;
   }
 
-  // Solo se puede crear una medida sobre un riesgo NON_NEGLIGIBLE. endDate la
-  // calcula el servicio (startWeek + durationDays), nunca el cliente.
   async createMeasure(
     organisation: string,
     riskId: string,
@@ -336,8 +311,6 @@ export class RiskToolService extends EvaluationToolService {
       status: m.status,
     }));
   }
-
-  // ── Exportes ─────────────────────────────────────────────────────────────
 
   async mitigationPlanExport(
     organisation: string,
@@ -441,10 +414,6 @@ export class RiskToolService extends EvaluationToolService {
     return file;
   }
 
-  // ── Sugerencias de medidas con IA y prioridad de impacto ─────────────────
-
-  // Riesgos NON_NEGLIGIBLE sin medida, agrupados por número de sección, con
-  // una sola consulta para toda la evaluación.
   private async getRisksWithoutMeasureBySection(
     evaluation: EvaluationWithStructure,
   ): Promise<Map<number, RiskItemWithId[]>> {
@@ -536,8 +505,6 @@ export class RiskToolService extends EvaluationToolService {
     };
   }
 
-  // Plan de mitigación completo: una llamada a la IA POR PRINCIPIO, saltando
-  // los que no tienen riesgo pendiente; resultado ordenado por impacto.
   async suggestMeasuresForEvaluation(
     organisation: string,
     evaluationId: string,
@@ -581,7 +548,6 @@ export class RiskToolService extends EvaluationToolService {
           riskId: item.riskId,
           code: item.code,
           score: item.score,
-          // Prioridad de impacto: peso × brecha bajo el umbral efectivo del país.
           impactScore: item.weight * (item.threshold - item.score),
           sectionNumber: section.number,
           sectionName: section.name,
@@ -606,8 +572,6 @@ export class RiskToolService extends EvaluationToolService {
     return { suggestions: allSuggestions };
   }
 
-  // Ranking determinístico (peso × brecha bajo el umbral efectivo del país)
-  // de los riesgos no despreciables aún sin medida — no llama a la IA.
   async getImpactPriority(organisation: string, evaluationId: string) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,

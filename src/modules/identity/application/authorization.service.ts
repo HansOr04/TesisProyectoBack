@@ -6,8 +6,6 @@ import {
   UserRoleWithPermissions,
 } from '../domain/permission.types';
 
-// RBAC por organización: rol → permisos (módulo:acción). Un usuario puede
-// tener varios roles en la misma organización; se unen sus permisos.
 @Injectable()
 export class AuthorizationService {
   constructor(private readonly prisma: PrismaService) {}

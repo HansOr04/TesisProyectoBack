@@ -19,10 +19,6 @@ import {
 import { ORGANIZATIONAL_TOOL_DEFINITION } from '../domain/organizational-tool.definition';
 import { OrganizationalToolAiService } from './organizational-tool-ai.service';
 
-// Herramienta Organizativa: diagnóstico de fortalecimiento organizativo por dimensiones.
-// Todo el flujo (plantilla versionada, evaluación, puntuación, medidas por KPI,
-// exportes, IA, panel) es el genérico de IndicatorMeasureToolService; esta
-// clase solo fija la definición de la herramienta y sus dependencias.
 @Injectable()
 export class OrganizationalToolService extends IndicatorMeasureToolService {
   constructor(

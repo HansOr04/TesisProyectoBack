@@ -1,25 +1,3 @@
-// Prueba de carga del guardado de calificaciones (HU-68, RNF-04).
-//
-// Simula USUARIOS evaluadores calificando a la vez la misma evaluación en
-// curso durante DURACION_S segundos y mide el tiempo de respuesta del
-// guardado (PUT .../responses). CA-68.1: con 20 usuarios, el 95 % responde en
-// menos de 1 segundo.
-//
-// Uso (sin dependencias, Node 18 o superior):
-//   API_URL=https://<servidor> ORG=<proyecto> EVALUACION_ID=<id> \
-//   CUENTAS=<archivo> node scripts/carga-guardado.mjs
-//
-// CUENTAS es un archivo con una cuenta por línea («correo contraseña»): cada
-// evaluador simulado usa la suya y todos inician sesión a la vez, como al
-// empezar un taller. Con EMAIL y PASSWORD en lugar de CUENTAS, todos
-// comparten una sola sesión.
-//
-// Variables opcionales: HERRAMIENTA (organizational | capacity, por defecto
-// organizational), USUARIOS (20), DURACION_S (60), PAUSA_MS (3000, la espera
-// del guardado automático de la web entre un cambio y el siguiente).
-//
-// Escribe calificaciones de verdad: usar una evaluación de prueba.
-
 const env = process.env;
 const API = (env.API_URL ?? 'http://localhost:3100').replace(/\/$/, '');
 const ORG = env.ORG ?? 'demo';
@@ -45,7 +23,6 @@ if (!env.EVALUACION_ID || accounts.length === 0) {
   process.exit(2);
 }
 
-// Todos inician sesión a la vez, como al empezar un taller.
 const loginStatuses = new Map();
 const sessions = await Promise.all(
   accounts.slice(0, USERS).map(async ({ email, password }) => {
@@ -90,7 +67,6 @@ const until = Date.now() + DURATION_MS;
 
 async function evaluator(n) {
   const headers = logged[(n - 1) % logged.length];
-  // Cada evaluador empieza en un momento distinto, como en un taller real.
   await sleep(Math.random() * PAUSE_MS);
   while (Date.now() < until) {
     const indicator = indicators[Math.floor(Math.random() * indicators.length)];
@@ -113,9 +89,7 @@ async function evaluator(n) {
       });
       await r.arrayBuffer();
       status = r.status;
-    } catch {
-      /* se cuenta como error de red */
-    }
+    } catch {}
     latencies.push(performance.now() - t0);
     statuses.set(status, (statuses.get(status) ?? 0) + 1);
     await sleep(PAUSE_MS);

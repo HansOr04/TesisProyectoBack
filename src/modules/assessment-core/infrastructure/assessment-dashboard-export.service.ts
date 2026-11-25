@@ -31,9 +31,6 @@ function cell(prefix: string, summary: AssessmentDashboardToolSummary | null) {
   };
 }
 
-// F6-B02: exportable equivalente al informe consolidado del Excel original
-// — una fila por organización, con el estado/puntaje/alertas de las 3
-// herramientas lado a lado (mismo dato que ve la tabla del dashboard).
 @Injectable()
 export class AssessmentDashboardExportService {
   async buildWorkbook(rows: AssessmentDashboardRow[]) {

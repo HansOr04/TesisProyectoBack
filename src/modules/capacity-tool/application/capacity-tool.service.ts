@@ -19,10 +19,6 @@ import {
 import { CAPACITY_TOOL_DEFINITION } from '../domain/capacity-tool.definition';
 import { CapacityToolAiService } from './capacity-tool-ai.service';
 
-// Herramienta de Capacidades: análisis de capacidades frente al marco normativo por áreas.
-// Todo el flujo (plantilla versionada, evaluación, puntuación, medidas por KPI,
-// exportes, IA, panel) es el genérico de IndicatorMeasureToolService; esta
-// clase solo fija la definición de la herramienta y sus dependencias.
 @Injectable()
 export class CapacityToolService extends IndicatorMeasureToolService {
   constructor(

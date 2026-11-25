@@ -1,11 +1,3 @@
-# Despliegue continuo del servidor. Cuando el CI termina en verde sobre main,
-# Heroku despliega ese commit (integración de GitHub: compila, corre las
-# migraciones en la fase release y publica). Este workflow espera a que el
-# despliegue de ESE commit termine y verifica la API en producción:
-#
-#   esperar despliegue ── salud ── seguridad de acceso ── CORS
-#
-# Si Heroku falla o la API no responde como debe, el workflow queda en rojo.
 name: Despliegue
 
 on:
@@ -36,7 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      # Heroku registra cada despliegue en GitHub (entorno «evaluartesis»).
       - name: Despliegue del commit ${{ env.SHA }}
         env:
           GH_TOKEN: ${{ github.token }}

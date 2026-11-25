@@ -7,8 +7,6 @@ import { PrismaService } from '../../../shared/infrastructure/database/prisma.se
 import { AssessmentAuditService } from './assessment-audit.service';
 import { ASSESSMENT_ROLE_CODES } from '../domain/assessment.constants';
 
-// RF-01: administrador y evaluador Assessment sobre el subsistema real de autorización
-// (AuthRole/AuthUserRole) — ver doc 03 §2.0. No se crea un modelo propio de roles.
 @Injectable()
 export class AssessmentRolesService {
   constructor(
@@ -58,10 +56,6 @@ export class AssessmentRolesService {
       throw new ConflictException('User already has this Assessment role');
     }
 
-    // AuthUserRole has a unique constraint on (organisation, userId, roleId)
-    // that isn't scoped to deletedAt, so a previously revoked assignment for
-    // this exact role must be revived via upsert, not re-created, or this
-    // throws a P2002 constraint violation.
     const userRole = await this.prisma.authUserRole.upsert({
       where: {
         organisation_userId_roleId: {
@@ -145,8 +139,6 @@ export class AssessmentRolesService {
           userId,
           role: { code: { in: [...ASSESSMENT_ROLE_CODES] } },
         },
-        // El historial incluye asignaciones revocadas (deletedAt != null),
-        // por eso aquí no se filtra por deletedAt.
         include: { role: true },
         orderBy: { createdAt: 'desc' },
       }),
