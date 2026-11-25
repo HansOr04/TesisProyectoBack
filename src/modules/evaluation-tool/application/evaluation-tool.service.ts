@@ -55,7 +55,7 @@ export interface ScoreResult {
 export interface OverviewContext {
   latestByProfile: Map<string, EvaluationWithStructure>;
   excludedByProfile: Map<string, Set<string>>;
-  criticalByEvaluation: Map<string, number>;
+  criticalByEvaluation: Map<string, number> | null;
 }
 
 export abstract class EvaluationToolService {
@@ -96,16 +96,9 @@ export abstract class EvaluationToolService {
   }
 
   protected countCriticalByEvaluation(
-    evaluations: EvaluationWithStructure[],
-  ): Promise<Map<string, number>> {
-    return Promise.resolve(
-      new Map(
-        evaluations.map((e) => [
-          e.id,
-          e.responses.filter((r) => r.isCritical).length,
-        ]),
-      ),
-    );
+    _evaluations: EvaluationWithStructure[],
+  ): Promise<Map<string, number> | null> {
+    return Promise.resolve(null);
   }
 
   protected abstract countMeasuresByEvaluation(
@@ -876,7 +869,7 @@ export abstract class EvaluationToolService {
       return {
         latestByProfile,
         excludedByProfile: new Map(),
-        criticalByEvaluation: new Map(),
+        criticalByEvaluation: null,
       };
     }
     const evaluations = await this.evaluations.findByProfiles(
@@ -900,6 +893,10 @@ export abstract class EvaluationToolService {
       this.countCriticalByEvaluation(latest),
     ]);
     return { latestByProfile, excludedByProfile, criticalByEvaluation };
+  }
+
+  private countCriticalSections(sectionScores: SectionScoreResult[]): number {
+    return sectionScores.filter((s) => s.critical).length;
   }
 
   protected buildOrganisationRow(
@@ -927,7 +924,9 @@ export abstract class EvaluationToolService {
         status: evaluation.status,
         globalScore,
         sectionScores,
-        criticalCount: context.criticalByEvaluation.get(evaluation.id) ?? 0,
+        criticalCount: context.criticalByEvaluation
+          ? (context.criticalByEvaluation.get(evaluation.id) ?? 0)
+          : this.countCriticalSections(sectionScores),
         isConsolidated: false,
       };
     }
@@ -980,14 +979,17 @@ export abstract class EvaluationToolService {
         .map((r) => r.sectionScores.find((s) => s.number === number))
         .filter((s): s is SectionScoreResult => !!s);
       const sample = values[0];
+      const weightedAvg =
+        values.reduce((sum, s) => sum + s.weightedAvg, 0) / values.length;
       return {
         sectionId: sample.sectionId,
         number,
         name: sample.name,
         weight: sample.weight,
-        weightedAvg:
-          values.reduce((sum, s) => sum + s.weightedAvg, 0) / values.length,
-        critical: values.some((s) => s.critical),
+        weightedAvg,
+        critical:
+          this.strategy.isCritical(weightedAvg) &&
+          values.some((s) => s.critical),
       };
     });
 
@@ -997,7 +999,9 @@ export abstract class EvaluationToolService {
       status: null,
       globalScore,
       sectionScores,
-      criticalCount: withScore.reduce((sum, r) => sum + r.criticalCount, 0),
+      criticalCount: context.criticalByEvaluation
+        ? withScore.reduce((sum, r) => sum + r.criticalCount, 0)
+        : this.countCriticalSections(sectionScores),
       isConsolidated: true,
     };
   }

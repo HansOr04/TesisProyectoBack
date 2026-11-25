@@ -92,6 +92,10 @@ Notas:
 | `MeasureCounts` | tipo |  |
 | `FileExport` | tipo |  |
 
+Campos:
+
+- `OrganisationOverviewRow.criticalCount`: Secciones críticas; en Riesgos, riesgos no despreciables sin medida.
+
 ### evaluation.repository.ts
 
 `src/modules/evaluation-tool/domain/ports/evaluation.repository.ts`
@@ -207,7 +211,7 @@ Notas:
 | `strategy()` | redefinible | Estrategia de puntuación |
 | `sectionLabel()` | redefinible | Nombre de la sección |
 | `persistResponses(evaluation, dto, scoredBy, _actorId?)` | redefinible | Ganchos redefinibles por herramienta   /** Persiste las respuestas de KPI. Riesgos lo redefine para clasificar y guardar los riesgos en la misma transacción. |
-| `countCriticalByEvaluation(evaluations)` | redefinible | Críticos por evaluación para el panel (KPI críticos por defecto). |
+| `countCriticalByEvaluation(evaluations)` | redefinible | Críticos propios de la herramienta para el panel. Por defecto devuelve null y el panel cuenta las secciones críticas (dimensiones o áreas) de cada fila. |
 | `countMeasuresByEvaluation(organisation, evaluationIds)` | redefinible | Total/hechas de medidas por evaluación para el historial de evolución. |
 | `recordStructureChange(organisation, entity, operation, target, before, after, actorId?)` | interno | Estructura (administrador)   /** Trazabilidad de cambios estructurales: registra en la auditoría qué entidad cambió y cada campo con su valor anterior y nuevo. |
 | `listTemplates(organisation)` | público | Versiones de la plantilla |
@@ -235,9 +239,10 @@ Notas:
 | `complete(organisation, evaluationId, actorId?)` | público | Cierra la evaluación si no falta ningún KPI |
 | `summary(organisation, evaluationId)` | público | Resumen de puntajes y críticos |
 | `organisationsOverview(organisation, scope)` | público | Panel general de organizaciones   Perfiles de primer nivel (parentProfileId: null) con su última evaluación de esta herramienta. Las asociaciones Nivel 2 sin evaluación propia se consolidan a partir de sus miembros. |
-| `loadOverviewContext(organisation, profileIds)` | redefinible | Carga en lote todo lo que necesita el panel: última evaluación por perfil, exclusiones de aplicabilidad para las no completadas y críticos por evaluación. |
+| `loadOverviewContext(organisation, profileIds)` | redefinible | Carga en lote todo lo que necesita el panel: última evaluación por perfil, exclusiones de aplicabilidad para las no completadas y críticos propios. |
+| `countCriticalSections(sectionScores)` | interno | Secciones críticas de una fila del panel |
 | `buildOrganisationRow(profile, context, children)` | redefinible | Fila del panel de una organización |
-| `consolidateChildrenRow(profile, children, context)` | redefinible | Asociación Nivel 2 sin evaluación propia: promedio de sus miembros por sección, para que el panel refleje el estado agregado y no "sin evaluación". |
+| `consolidateChildrenRow(profile, children, context)` | redefinible | Asociación Nivel 2 sin evaluación propia: promedio de sus miembros por sección, para que el panel refleje el estado agregado y no "sin evaluación". Una sección es crítica si lo es el promedio que muestra la fila y lo es en algún miembro: la que nadie calificó vale 0 pero no es crítica. |
 | `evaluationHistory(organisation, profileId)` | público | Evolución en el tiempo: una evaluación completada = un punto; se usa para el gráfico de tendencia y la diapositiva de evolución del reporte. |
 | `improveObservation(organisation, evaluationId, indicatorId, dto, actorId?)` | público | Asistencia con IA |
 | `detectInconsistencies(organisation, evaluationId, actorId?)` | público | Una sola llamada por evaluación al intentar completarla. |
@@ -247,6 +252,7 @@ Notas:
 
 Notas:
 
+- `OverviewContext.criticalByEvaluation`: null cuando la herramienta cuenta secciones críticas y no un total propio.
 - `createEvaluation`: Idempotencia: si ya hay una evaluación en curso para este perfil se devuelve esa en vez de crear un duplicado (doble clic, recarga).
 - `improveObservation`: Lee el indicador de la plantilla (no de la respuesta): el KPI puede estar aún sin guardar mientras el usuario califica en el wizard.
 
