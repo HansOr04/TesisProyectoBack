@@ -48,12 +48,10 @@ export class RequestContextService {
   }
 
   getRequestIp(): string | undefined {
-    if (!this.request) return undefined;
-    const forwarded = this.request.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-      return forwarded.split(',')[0]?.trim();
-    }
-    return this.request.ip;
+    // Express ya resuelve X-Forwarded-For según «trust proxy»: leer la
+    // cabecera aquí dejaba que el cliente escribiera cualquier IP en la
+    // auditoría.
+    return this.request?.ip;
   }
 
   getUserAgent(): string | undefined {

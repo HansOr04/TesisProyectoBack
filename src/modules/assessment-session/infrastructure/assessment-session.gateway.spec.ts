@@ -24,8 +24,20 @@ describe('AssessmentSessionGateway', () => {
   let accessScope: { resolveProfileScope: jest.Mock; assertInScope: jest.Mock };
   let prisma: {
     organisation: { count: jest.Mock };
-    organisationMember: { findUnique: jest.Mock };
+    user: { findUnique: jest.Mock };
   };
+  /** Cuenta tal como está en la base cuando el socket pide entrar a la sala. */
+  const account = (
+    organisations: string[],
+    overrides: Partial<{ isSuperAdmin: boolean; isActive: boolean }> = {},
+  ) =>
+    prisma.user.findUnique.mockResolvedValue({
+      isActive: true,
+      deletedAt: null,
+      isSuperAdmin: false,
+      memberships: organisations.map((organisationId) => ({ organisationId })),
+      ...overrides,
+    });
 
   beforeEach(() => {
     verify = jest.fn();
@@ -35,8 +47,9 @@ describe('AssessmentSessionGateway', () => {
     };
     prisma = {
       organisation: { count: jest.fn().mockResolvedValue(0) },
-      organisationMember: { findUnique: jest.fn().mockResolvedValue(null) },
+      user: { findUnique: jest.fn() },
     };
+    account(['demo']);
     gateway = new AssessmentSessionGateway(
       { verify, sign: jest.fn() },
       accessScope as any,
@@ -108,6 +121,7 @@ describe('AssessmentSessionGateway', () => {
     });
 
     it('rejects a join for an org the user does not belong to', async () => {
+      account(['other']);
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -125,6 +139,7 @@ describe('AssessmentSessionGateway', () => {
 
     it('lets a superadmin join a project they created, with full scope', async () => {
       prisma.organisation.count.mockResolvedValue(1);
+      account([], { isSuperAdmin: true });
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -145,6 +160,7 @@ describe('AssessmentSessionGateway', () => {
     });
 
     it('keeps a superadmin out of a project created by someone else', async () => {
+      account([], { isSuperAdmin: true });
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -161,7 +177,7 @@ describe('AssessmentSessionGateway', () => {
     });
 
     it('lets a member just added to the project join without a new token', async () => {
-      prisma.organisationMember.findUnique.mockResolvedValue({ id: 'm' });
+      account(['demo']);
       const client = createMockSocket();
       client.data.auth = {
         userId: 'u',
@@ -174,6 +190,39 @@ describe('AssessmentSessionGateway', () => {
         evaluationId: 'ev-1',
       });
       expect(client.join).toHaveBeenCalledWith('eval:ev-1');
+    });
+
+    it('ignores what the token says about a member already removed', async () => {
+      account([]);
+      const client = createMockSocket();
+      client.data.auth = {
+        userId: 'u',
+        email: 'e',
+        organisations: ['demo'],
+        isSuperAdmin: true,
+      };
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('disconnects an account deactivated after connecting', async () => {
+      account(['demo'], { isActive: false });
+      const client = createMockSocket();
+      client.data.auth = {
+        userId: 'u',
+        email: 'e',
+        organisations: ['demo'],
+        isSuperAdmin: false,
+      };
+      await gateway.handleJoin(client as any, {
+        org: 'demo',
+        evaluationId: 'ev-1',
+      });
+      expect(client.join).not.toHaveBeenCalled();
+      expect(client.disconnect).toHaveBeenCalledWith(true);
     });
 
     it('keeps an evaluator out of an evaluation of an unassigned profile', async () => {

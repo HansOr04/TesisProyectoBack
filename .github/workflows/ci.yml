@@ -103,7 +103,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      # Compara `npm audit` (dependencias de producción) de la rama base con
+      # Compara `npm audit` de la rama base con
       # el del cambio: falla si se agregan vulnerabilidades altas o críticas.
       # Las que ya existían se informan en el resumen sin bloquear.
       - name: Vulnerabilidades nuevas en dependencias
@@ -113,17 +113,17 @@ jobs:
                     | select(.severity == "high" or .severity == "critical")
                     | "\(.severity)\t\(.name)\t\(.title)\t\(.url)"] | unique[]' "$1" | sort
           }
-          npm audit --omit=dev --json > /tmp/head.json || true
+          npm audit --json > /tmp/head.json || true
           ids /tmp/head.json > /tmp/head.txt
           if [ -d base ]; then
-            (cd base && npm audit --omit=dev --json > /tmp/base.json) || true
+            (cd base && npm audit --json > /tmp/base.json) || true
             ids /tmp/base.json > /tmp/base.txt
           else
             cp /tmp/head.txt /tmp/base.txt
           fi
           comm -13 /tmp/base.txt /tmp/head.txt > /tmp/new.txt
           {
-            echo "### Vulnerabilidades altas y críticas (dependencias de producción)"
+            echo "### Vulnerabilidades altas y críticas (todas las dependencias)"
             echo "- Ya existentes: $(wc -l < /tmp/base.txt)"
             echo "- Nuevas en este cambio: $(wc -l < /tmp/new.txt)"
           } >> "$GITHUB_STEP_SUMMARY"
