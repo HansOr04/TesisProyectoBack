@@ -159,6 +159,7 @@ export interface OrganisationOverviewRow {
   status: string | null;
   globalScore: number | null;
   sectionScores: SectionScoreResult[];
+  /** Secciones críticas; en Riesgos, riesgos no despreciables sin medida. */
   criticalCount: number;
   isConsolidated: boolean;
 }

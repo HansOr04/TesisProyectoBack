@@ -56,7 +56,8 @@ export interface ScoreResult {
 export interface OverviewContext {
   latestByProfile: Map<string, EvaluationWithStructure>;
   excludedByProfile: Map<string, Set<string>>;
-  criticalByEvaluation: Map<string, number>;
+  /** null: la herramienta cuenta secciones críticas, no un total propio. */
+  criticalByEvaluation: Map<string, number> | null;
 }
 
 /**
@@ -113,18 +114,14 @@ export abstract class EvaluationToolService {
     );
   }
 
-  /** Críticos por evaluación para el panel (KPI críticos por defecto). */
+  /**
+   * Críticos propios de la herramienta para el panel. Por defecto no hay: el
+   * panel cuenta las secciones críticas (dimensiones o áreas) de cada fila.
+   */
   protected countCriticalByEvaluation(
-    evaluations: EvaluationWithStructure[],
-  ): Promise<Map<string, number>> {
-    return Promise.resolve(
-      new Map(
-        evaluations.map((e) => [
-          e.id,
-          e.responses.filter((r) => r.isCritical).length,
-        ]),
-      ),
-    );
+    _evaluations: EvaluationWithStructure[],
+  ): Promise<Map<string, number> | null> {
+    return Promise.resolve(null);
   }
 
   /** Total/hechas de medidas por evaluación para el historial de evolución. */
@@ -917,7 +914,7 @@ export abstract class EvaluationToolService {
   }
 
   // Carga en lote todo lo que necesita el panel: última evaluación por perfil,
-  // exclusiones de aplicabilidad para las no completadas y críticos por evaluación.
+  // exclusiones de aplicabilidad para las no completadas y críticos propios.
   protected async loadOverviewContext(
     organisation: string,
     profileIds: string[],
@@ -927,7 +924,7 @@ export abstract class EvaluationToolService {
       return {
         latestByProfile,
         excludedByProfile: new Map(),
-        criticalByEvaluation: new Map(),
+        criticalByEvaluation: null,
       };
     }
     const evaluations = await this.evaluations.findByProfiles(
@@ -951,6 +948,10 @@ export abstract class EvaluationToolService {
       this.countCriticalByEvaluation(latest),
     ]);
     return { latestByProfile, excludedByProfile, criticalByEvaluation };
+  }
+
+  private countCriticalSections(sectionScores: SectionScoreResult[]): number {
+    return sectionScores.filter((s) => s.critical).length;
   }
 
   protected buildOrganisationRow(
@@ -978,7 +979,9 @@ export abstract class EvaluationToolService {
         status: evaluation.status,
         globalScore,
         sectionScores,
-        criticalCount: context.criticalByEvaluation.get(evaluation.id) ?? 0,
+        criticalCount: context.criticalByEvaluation
+          ? (context.criticalByEvaluation.get(evaluation.id) ?? 0)
+          : this.countCriticalSections(sectionScores),
         isConsolidated: false,
       };
     }
@@ -1033,14 +1036,19 @@ export abstract class EvaluationToolService {
         .map((r) => r.sectionScores.find((s) => s.number === number))
         .filter((s): s is SectionScoreResult => !!s);
       const sample = values[0];
+      const weightedAvg =
+        values.reduce((sum, s) => sum + s.weightedAvg, 0) / values.length;
       return {
         sectionId: sample.sectionId,
         number,
         name: sample.name,
         weight: sample.weight,
-        weightedAvg:
-          values.reduce((sum, s) => sum + s.weightedAvg, 0) / values.length,
-        critical: values.some((s) => s.critical),
+        weightedAvg,
+        // Crítica según el promedio que muestra la fila; una sección que nadie
+        // calificó vale 0 pero no es crítica.
+        critical:
+          this.strategy.isCritical(weightedAvg) &&
+          values.some((s) => s.critical),
       };
     });
 
@@ -1050,7 +1058,9 @@ export abstract class EvaluationToolService {
       status: null,
       globalScore,
       sectionScores,
-      criticalCount: withScore.reduce((sum, r) => sum + r.criticalCount, 0),
+      criticalCount: context.criticalByEvaluation
+        ? withScore.reduce((sum, r) => sum + r.criticalCount, 0)
+        : this.countCriticalSections(sectionScores),
       isConsolidated: true,
     };
   }
