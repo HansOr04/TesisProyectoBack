@@ -4,7 +4,11 @@ const { execSync } = require('node:child_process');
 const ts = require('typescript');
 
 const FIX = process.argv.includes('--fix');
-const IGNORED = /(^|\/)(node_modules|dist|coverage)\/|routeTree\.gen\.ts$/;
+const IGNORED_FOLDERS = new Set(['node_modules', 'dist', 'coverage']);
+const GENERATED = 'routeTree.gen.ts';
+const isIgnored = (file) =>
+  path.basename(file) === GENERATED ||
+  file.split('/').some((part) => IGNORED_FOLDERS.has(part));
 const DIRECTIVE =
   /eslint-(disable|enable)|@ts-(expect-error|ignore|nocheck)|^\/\/\/\s*<reference|@vite-ignore|__PURE__|prettier-ignore|Stryker (disable|restore)/;
 
@@ -100,7 +104,7 @@ const files = execSync(
   .toString()
   .trim()
   .split('\n')
-  .filter((file) => file && !IGNORED.test(file) && fs.existsSync(file));
+  .filter((file) => file && !isIgnored(file) && fs.existsSync(file));
 
 let total = 0;
 for (const file of files) {

@@ -58,6 +58,7 @@ flowchart LR
 | `ci.yml` | Pull request y push a `develop` y `main` | Todas las etapas. La última es la que exige la protección de ramas |
 | `codeql.yml` | Pull request, push y semanal | Análisis de código |
 | `despliegue.yml` | Al terminar el CI de `main` | Espera a Heroku y verifica salud, acceso y CORS |
+| `documentacion.yml` | Al cambiar la documentación | Compila el sitio y, si está activado, lo publica |
 | `vigilancia.yml` | Cada 15 minutos | Comprueba producción y abre un aviso si falla |
 
 - **cambios** salta las pruebas si solo cambió documentación.

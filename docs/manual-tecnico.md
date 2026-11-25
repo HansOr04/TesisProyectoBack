@@ -8,7 +8,7 @@ El resto de la documentación está en el [índice](README.md).
 ## 1. Arquitectura
 
 Resumen; el detalle está en [arquitectura.md](arquitectura.md) y
-[base-de-datos.md](base-de-datos.md).
+[base de datos](base-de-datos/index.md).
 
 | Parte | Tecnología | Repositorio | Dónde corre |
 |---|---|---|---|

@@ -55,7 +55,7 @@ Si el recurso es nuevo, suma su tipo a `AssessmentScopedResource` y su búsqueda
 2. `npx prisma migrate dev --name <descripcion>`.
 3. Que sea compatible con la versión en producción: columnas nuevas opcionales o con
    valor por defecto.
-4. Documenta la tabla en `base-de-datos.md`.
+4. Documenta la tabla en `base-de-datos/`.
 
 ## Agregar una herramienta por KPI
 

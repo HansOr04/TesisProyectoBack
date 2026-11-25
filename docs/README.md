@@ -6,13 +6,13 @@ El código no lleva comentarios: todo lo que hay que saber está aquí.
 |---|---|
 | Una vista general, instalar, desplegar o restaurar | [manual-tecnico.md](manual-tecnico.md) |
 | Entender cómo está construido | [arquitectura.md](arquitectura.md) |
-| Conocer las tablas y sus relaciones | [base-de-datos.md](base-de-datos.md) |
+| Conocer las tablas y sus relaciones | [base de datos](base-de-datos/index.md) |
 | Consultar las 126 rutas de la API y sus permisos | [api.md](api.md) |
 | Saber cómo se calcula y qué se permite | [reglas-de-negocio.md](reglas-de-negocio.md) |
 | Entender la IA y los reportes | [ia-y-reportes.md](ia-y-reportes.md) |
 | **Ampliar el sistema** | [como-expandir.md](como-expandir.md) |
 | Saber por qué algo está hecho así | [decisiones.md](decisiones.md) |
-| Buscar un archivo, clase o método | [referencia-codigo.md](referencia-codigo.md) |
+| Buscar un archivo, clase o método | [referencia](referencia/index.md) |
 | Entender las pruebas y el pipeline | [pruebas-y-pipeline.md](pruebas-y-pipeline.md) |
 | Operar la plataforma | [monitoreo.md](monitoreo.md), [respaldos.md](respaldos.md), [entornos-y-secretos.md](entornos-y-secretos.md), [lista-verificacion.md](lista-verificacion.md) |
 | Ver seguridad y rendimiento | [seguridad.md](seguridad.md), [rendimiento.md](rendimiento.md) |
@@ -20,6 +20,21 @@ El código no lleva comentarios: todo lo que hay que saber está aquí.
 
 La web tiene su propia documentación: [TesisFrontend/docs](https://github.com/HansOr04/TesisFrontend/tree/main/docs),
 con su arquitectura, su referencia, cómo expandirla y el manual de usuario.
+
+## Verla como sitio web
+
+Con buscador, menú y diagramas (MkDocs Material). Los archivos de esta carpeta son la
+fuente; el sitio suma los de la web.
+
+```bash
+pip install -r sitio/requirements.txt
+scripts/documentacion.sh build
+node scripts/ver-documentacion.mjs
+```
+
+Abre <http://localhost:8200>. El menú se define en `mkdocs.yml`. El workflow
+«Documentación» lo compila en cada cambio y, con la variable
+`DOCUMENTACION_PUBLICA=si` y GitHub Pages activado, lo publica al llegar a `main`.
 
 ## Mantenerla al día
 

@@ -1,7 +1,7 @@
 # Decisiones
 
 Por qué está así. El detalle de cada archivo está en
-[referencia-codigo.md](referencia-codigo.md).
+[referencia](referencia/index.md).
 
 | Decisión | Por qué |
 |---|---|
