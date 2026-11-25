@@ -1,0 +1,57 @@
+name: Documentación
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ['docs/**', 'sitio/**', 'mkdocs.yml', 'scripts/documentacion.sh', '.github/workflows/documentacion.yml']
+  push:
+    branches: [main]
+    paths: ['docs/**', 'sitio/**', 'mkdocs.yml', 'scripts/documentacion.sh', '.github/workflows/documentacion.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: documentacion-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  compilar:
+    name: compilar sitio
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/TesisFrontend
+          ref: ${{ github.ref_name == 'main' && 'main' || 'develop' }}
+          path: .web
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r sitio/requirements.txt
+      - run: scripts/documentacion.sh build
+        env:
+          WEB_DOCS: .web/docs
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request' && vars.DOCUMENTACION_PUBLICA == 'si'
+        with:
+          path: .sitio-publicado
+
+  publicar:
+    name: publicar sitio
+    needs: compilar
+    if: github.event_name != 'pull_request' && vars.DOCUMENTACION_PUBLICA == 'si'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publicar.outputs.page_url }}
+    steps:
+      - id: publicar
+        uses: actions/deploy-pages@v4

@@ -4,7 +4,6 @@ import { ASSESSMENT_MODULE_CODES } from '../../../assessment-core/domain/assessm
 import { createIndicatorToolController } from '../../../evaluation-tool/presentation/indicator-tool.controller.factory';
 import { CapacityToolService } from '../../application/capacity-tool.service';
 
-// Herramienta de Capacidades — rutas /:org/assessments/capacity/*.
 @ApiTags('Herramienta de Capacidades')
 @ApiBearerAuth()
 @Controller()

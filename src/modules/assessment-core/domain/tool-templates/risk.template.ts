@@ -6,19 +6,6 @@ import {
 
 const CODE_PREFIX = 'KPI';
 
-// KPI reales de la Herramienta de Riesgos (Gestión de Riesgos), transcritos del Excel original
-// de la herramienta (HERRAMIENTA GESTION DE RIESGOS_V3_2025.xlsm, hoja "DATA UE LDD (2)"):
-// nombre, cálculo del indicador y peso exactos por KPI dentro de cada principio (los 4 totales
-// de peso ya suman 100 en el archivo fuente). 46 KPI en 4 principios.
-//
-// helpText: instructivo detallado por KPI — nombre exacto del/los documento(s) requerido(s), qué
-// campos debe tener cada uno, quién lo firma/llena, formato esperado, y dónde verificarlo. No usa
-// sintaxis markdown (el texto se renderiza en un <p> plano con whitespace-pre-line: el formato es
-// solo saltos de línea + numeración/guiones).
-// scoringRubric: rúbrica de 5 bandas ESPECÍFICA de cada KPI (no genérica), grounded en el
-// marco normativo de debida diligencia aplicable y el marco legal ecuatoriano aplicable (RUC/SRI, Código del
-// Trabajo, IESS, MAATE, ECUAPASS, Registro de la Propiedad, SENAGUA).
-
 interface IndicatorSeed {
   name: string;
   description: string;
@@ -520,8 +507,6 @@ const PRINCIPLES_SEED: PrincipleSeed[] = [
   },
 ];
 
-// RF-02: el país de la organización evaluada determina los parámetros de riesgo.
-// EC como entrada inicial (única jurisdicción del piloto de la tesis).
 const COUNTRY_RISK_PARAMS: Record<string, AssessmentCountryRiskParams> = {
   EC: { riskThreshold: 5 },
 };

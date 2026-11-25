@@ -7,11 +7,8 @@ export interface SectionScoreInput {
 export type AssessmentRiskClass = 'NEGLIGIBLE' | 'NON_NEGLIGIBLE';
 
 export interface ToolScoringStrategy {
-  /** Promedio ponderado de los KPI de una sección, por peso de KPI. */
   sectionAverage(section: SectionScoreInput): number;
-  /** Promedio ponderado de las secciones, por peso de sección. */
   globalScore(sections: SectionScoreInput[]): number;
-  /** score <= 5 ⇒ coloreado automático de KPI crítico (regla transversal RF-03/04/05). */
   isCritical(score: number): boolean;
 }
 
@@ -44,10 +41,8 @@ export class OrganizationalStrategy implements ToolScoringStrategy {
   }
 }
 
-// Capacity: mismo cálculo que Organizational, distinto etiquetado (doc 03 §2 F2-B05).
 export class CapacityStrategy extends OrganizationalStrategy {}
 
-// Risk: mismo cálculo que Organizational, más clasificación de riesgo por umbral (RF-05).
 export class RiskStrategy extends OrganizationalStrategy {
   classifyRisk(score: number, threshold: number): AssessmentRiskClass {
     return score > threshold ? 'NEGLIGIBLE' : 'NON_NEGLIGIBLE';

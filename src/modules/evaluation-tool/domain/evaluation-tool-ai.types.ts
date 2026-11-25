@@ -1,9 +1,5 @@
 import { BadGatewayException } from '@nestjs/common';
 
-// Contratos y parsers puros de la asistencia con IA de las herramientas.
-// Los parsers validan la respuesta del modelo con una regla anti-alucinación:
-// todo id que no venga de la lista enviada se descarta.
-
 export interface AiIndicatorContext {
   code: string;
   name: string;
@@ -48,7 +44,6 @@ export interface AiCriticalContext {
   score: number;
 }
 
-/** Un punto de fortaleza o brecha: título corto y una oración de detalle. */
 export interface AiInsightPoint {
   title: string;
   detail: string;
@@ -63,16 +58,12 @@ export interface AiReportInsights {
   keyFindings: string[];
   sectionAnalysis: Record<string, string>;
   recommendations: string[];
-  /** Lectura general de la organización: fortalezas y brechas principales. */
   strengths: AiInsightPoint[];
   gaps: AiInsightPoint[];
-  /** Mensaje de cierre de la lectura ejecutiva (1-2 oraciones). */
   conclusion: string;
-  /** Fortalezas y brechas de cada sección, por número de sección. */
   sectionInsights: Record<string, AiSectionInsight>;
 }
 
-/** FODA de la organización (máximo 4 puntos por cuadrante). */
 export interface AiSwot {
   strengths: string[];
   weaknesses: string[];
@@ -80,7 +71,6 @@ export interface AiSwot {
   threats: string[];
 }
 
-/** KPI de una sección con su nota y una observación breve, para la IA. */
 export interface AiKpiContext {
   code: string;
   name: string;
@@ -90,9 +80,7 @@ export interface AiKpiContext {
 
 export interface AiSectionDetailContext {
   number: number;
-  /** KPI mejor calificados de la sección. */
   best: AiKpiContext[];
-  /** KPI peor calificados de la sección. */
   worst: AiKpiContext[];
 }
 
@@ -115,11 +103,6 @@ export interface AiReportContext {
 
 export const MAX_INSIGHT_POINTS = 4;
 
-/**
- * Extrae y parsea el primer JSON (array u objeto) de una respuesta de LLM.
- * Toma el primer bloque balanceado, así que tolera texto alrededor y llaves
- * sobrantes al final (un error frecuente de los modelos rápidos).
- */
 export function extractJson(raw: string, shape: 'array' | 'object'): unknown {
   const open = shape === 'array' ? '[' : '{';
   const close = shape === 'array' ? ']' : '}';
@@ -151,9 +134,6 @@ export function extractJson(raw: string, shape: 'array' | 'object'): unknown {
   throw new BadGatewayException('AI response was not valid JSON');
 }
 
-// Extraída como función pura (no depende del proveedor ni de I/O) para poder
-// testear la validación anti-alucinación sin llamar a ningún LLM real: toda
-// sugerencia con un indicatorId que no vino en la lista pedida se descarta.
 export function parseAiMeasureSuggestions(
   raw: string,
   validIndicatorIds: string[],
@@ -176,8 +156,6 @@ export function parseAiMeasureSuggestions(
   );
 }
 
-// Misma lógica anti-alucinación que parseAiMeasureSuggestions: todo hallazgo
-// que referencie un indicatorId fuera de la lista enviada se descarta.
 export function parseAiInconsistencyFindings(
   raw: string,
   validIndicatorIds: string[],
@@ -202,8 +180,6 @@ export function parseAiInconsistencyFindings(
   );
 }
 
-// Anti-alucinación: cualquier clave de sectionAnalysis que no sea un número de
-// dimensión de los enviados se descarta en vez de mostrarse.
 export function parseAiReportInsights(
   raw: string,
   validSectionNumbers: string[],
@@ -269,10 +245,6 @@ export function parseAiReportInsights(
   };
 }
 
-/**
- * Acepta {title, detail} o un texto "Título: detalle"; descarta lo vacío y
- * corta en `max` puntos.
- */
 export function parseInsightPoints(
   raw: unknown,
   max: number,
@@ -301,7 +273,6 @@ export function parseInsightPoints(
   return points;
 }
 
-/** FODA: cuatro listas de textos, cada una con hasta 4 puntos. */
 export function parseAiSwot(raw: string): AiSwot {
   const parsed = extractJson(raw, 'object');
   if (typeof parsed !== 'object' || parsed === null) {
@@ -327,7 +298,6 @@ export function parseAiSwot(raw: string): AiSwot {
   return swot;
 }
 
-/** "EC" → "Ecuador"; sin país se asume Ecuador, donde opera la plataforma. */
 export function countryName(code?: string | null): string {
   if (!code) return 'Ecuador';
   try {

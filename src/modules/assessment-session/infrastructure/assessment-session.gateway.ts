@@ -27,14 +27,8 @@ export interface AssessmentSocketAuth {
   isSuperAdmin: boolean;
 }
 
-// Varios facilitadores calificando la misma evaluación en el taller ven el
-// avance del otro en vivo. Namespace propio /assessment, sala por evaluación
-// (eval:<evaluationId>) para no reenviar eventos a clientes ajenos. El
-// handshake valida el mismo JWT que la API HTTP, y un evaluador solo entra a
-// la sala de una evaluación de una organización que tiene asignada.
 @WebSocketGateway({
   namespace: '/assessments',
-  // Mismos orígenes que la API; sin CORS_ORIGIN (local) se admite cualquiera.
   cors: { origin: process.env.CORS_ORIGIN?.split(',') ?? true },
 })
 export class AssessmentSessionGateway
@@ -125,7 +119,6 @@ export class AssessmentSessionGateway
     void client.leave(this.room(body.evaluationId));
   }
 
-  /** Llamado por los servicios de herramienta tras persistir una respuesta. Nunca lanza. */
   emitScoreUpdated(evaluationId: string, payload: ScoreUpdatedEvent): void {
     try {
       this.server?.to(this.room(evaluationId)).emit('score.updated', payload);

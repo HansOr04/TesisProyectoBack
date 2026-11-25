@@ -29,13 +29,11 @@ export class UpdateIndicatorMeasureDto {
   @MaxLength(4000)
   verificationLink?: string;
 
-  // Resultado esperado al ejecutar la medida (se define al planificar).
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   expectedResult?: string;
 
-  // Mejoras aplicadas / evidencia narrativa registrada al actualizar el avance.
   @IsOptional()
   @IsString()
   @MaxLength(4000)

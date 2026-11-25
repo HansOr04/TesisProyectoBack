@@ -60,10 +60,6 @@ type EvaluationRow = {
   risks: { class: string; measures: unknown[] }[];
 };
 
-// Panel consolidado: una fila por organización con el estado de las 3
-// herramientas. Consultas por lote (una por herramienta + una por tipo de
-// exclusión + una por tipo de medida) en vez de N consultas por perfil, para
-// que el coste no crezca con el número de organizaciones.
 @Injectable()
 export class AssessmentDashboardService {
   private readonly strategy = new OrganizationalStrategy();
@@ -91,7 +87,6 @@ export class AssessmentDashboardService {
     const profileIds = profiles.map((p) => p.id);
     if (profileIds.length === 0) return [];
 
-    // Última evaluación por perfil y herramienta, en una consulta por herramienta.
     const latestByTool = new Map<Tool, Map<string, EvaluationRow>>();
     await Promise.all(
       TOOLS.map(async (tool) => {

@@ -33,12 +33,6 @@ export function getBearerToken(request: Request): string | undefined {
   return undefined;
 }
 
-/**
- * Guard global (APP_GUARD). Toda ruta HTTP debe declarar exactamente qué
- * exige: @Public(), @RequireAuthenticated() o @RequireGlobalSuperAdmin() —
- * las rutas sin declaración se rechazan, para que olvidar un decorador nunca
- * deje un endpoint abierto por accidente.
- */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -84,8 +78,6 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid token');
     }
 
-    // Permisos y membresías de la base, no del token: un usuario desactivado,
-    // degradado o sacado de un proyecto pierde el acceso de inmediato.
     const account = await loadCurrentAccount(this.prisma, payload.sub);
     if (!account) {
       throw new UnauthorizedException('Account is inactive');
@@ -98,8 +90,6 @@ export class JwtAuthGuard implements CanActivate {
       organisations: account.organisations,
     };
 
-    // Dentro de un proyecto, el superadministrador solo conserva el acceso
-    // total si es quien lo creó; en los demás entra como cualquier miembro.
     const org = request.params?.org || request.params?.organisation;
     if (org) {
       const access = await resolveOrganisationAccess(this.prisma, auth, org);
@@ -120,8 +110,6 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
-  // @Public en el handler gana; un handler restringido nunca se vuelve público
-  // por un @Public a nivel de clase.
   private isEffectivelyPublic(context: ExecutionContext): boolean {
     const handler = context.getHandler();
     const cls = context.getClass();

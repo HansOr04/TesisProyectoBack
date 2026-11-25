@@ -41,6 +41,9 @@ quienes siguen el repositorio; para recibirlo, cada integrante activa
 **Watch › Custom › Issues** en GitHub. Cuando todo vuelve a estar bien, el
 *issue* se cierra solo.
 
+A mano: `API_URL=<servidor> WEB_URL=<web> scripts/vigilancia.sh`. Reintenta 3 veces
+cada 20 segundos (`RETRIES`, `WAIT`) y termina con 1 si hay un problema.
+
 Probar la alerta sin una falla: Actions › Vigilancia › Run workflow ›
 «Abrir una alerta de prueba». La siguiente corrida la cierra.
 

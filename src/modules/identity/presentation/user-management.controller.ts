@@ -27,8 +27,6 @@ import {
   ViewerVisibilityDto,
 } from './dto/user-management.dto';
 
-// Gestión de usuarios de una organización. Requiere el permiso 'admin' del
-// módulo assessment-core (rol assessment_admin) o ser superadmin global.
 @ApiTags('Usuarios')
 @ApiBearerAuth()
 @Controller()
@@ -80,7 +78,6 @@ export class UserManagementController {
     return this.users.updateMember(org, id, dto, await this.actor());
   }
 
-  /** Qué organizaciones evaluadas ve un usuario con rol de visualizador. */
   @Put(':org/users/:id/visibility')
   @RequireAssessmentPermission('assessment-core', 'admin')
   async setVisibility(

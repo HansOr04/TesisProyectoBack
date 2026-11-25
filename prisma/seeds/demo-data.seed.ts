@@ -1,11 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
-// Datos de demostración para la analítica: organizaciones con perfiles
-// variados, evaluaciones completadas de las 3 herramientas, medidas sobre KPI
-// críticos y re-evaluaciones donde los KPI con medida concluida mejoran más.
-// Determinístico (PRNG con semilla) para que la memoria pueda reproducirlo.
-// Re-ejecutable: borra y vuelve a crear las organizaciones "Demo —".
-
 const DEMO_PREFIX = 'Demo — ';
 const TOOLS = ['ORGANIZATIONAL', 'CAPACITY', 'RISK'] as const;
 type Tool = (typeof TOOLS)[number];
@@ -29,11 +23,8 @@ interface DemoOrg {
   mainProduct: string;
   memberCount: number;
   yearStarted: number;
-  /** Capacidad latente 0–1: mueve todos los puntajes de la organización. */
   capability: number;
-  /** Segunda evaluación completada (histórico) para medir efectividad. */
   reevaluate: boolean;
-  /** Sesgos por herramienta (p.ej. fuerte en organización, débil en riesgos). */
   bias: Partial<Record<Tool, number>>;
 }
 
@@ -308,7 +299,6 @@ export async function seedDemoData(
         0.95,
         Math.max(0.15, org.capability + (org.bias[tool] ?? 0)),
       );
-      // Sesgo por sección estable para la organización (fortalezas/debilidades).
       const sectionBias = new Map(
         template.sections.map((s) => [s.id, (rand() - 0.5) * 2.2]),
       );
@@ -411,7 +401,6 @@ export async function seedDemoData(
 
       const first = await createEvaluation(firstScores, firstDate);
 
-      // Medidas sobre ~60 % de los KPI críticos de la primera evaluación.
       const criticalIds = [...firstScores.entries()]
         .filter(([, s]) => s <= 5)
         .map(([id]) => id);
@@ -496,8 +485,6 @@ export async function seedDemoData(
       }
 
       if (org.reevaluate) {
-        // Segunda evaluación: los KPI con medida concluida mejoran +2..+4, en curso +0..+2,
-        // sin medida −1..+1 (efecto real de las medidas, con ruido).
         const secondScores = new Map<string, number>();
         for (const [id, score] of firstScores) {
           const status = measureStatus.get(id);

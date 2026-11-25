@@ -16,7 +16,6 @@ import { ActivityLogQueryDto } from './activity-log.dto';
 export class ActivityLogController {
   constructor(private readonly logs: ActivityLogQueryService) {}
 
-  // Consulta paginada de la auditoría (administradores de evaluación).
   @Get(':org/activity-logs')
   @RequireAssessmentPermission('assessment-core', 'admin')
   list(@Param('org') org: string, @Query() query: ActivityLogQueryDto) {

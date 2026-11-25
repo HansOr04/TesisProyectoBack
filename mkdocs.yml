@@ -1,0 +1,133 @@
+site_name: Evalúa
+site_description: Documentación de la plataforma de evaluación organizacional
+docs_dir: .sitio
+site_dir: .sitio-publicado
+repo_url: https://github.com/HansOr04/TesisProyectoBack
+repo_name: Código fuente
+edit_uri: ""
+theme:
+  name: material
+  language: es
+  icon:
+    logo: material/leaf
+  font:
+    text: Plus Jakarta Sans
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Modo oscuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+extra_css:
+  - estilos/evalua.css
+plugins:
+  - search:
+      lang: es
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - Inicio: index.md
+  - Manual de usuario: web/manual-usuario.md
+  - Sistema:
+      - Arquitectura: arquitectura.md
+      - Reglas de negocio: reglas-de-negocio.md
+      - IA y reportes: ia-y-reportes.md
+      - Arquitectura de la web: web/arquitectura.md
+      - Decisiones:
+          - Servidor: decisiones.md
+          - Web: web/decisiones.md
+  - Base de datos:
+      - base-de-datos/index.md
+      - Identidad y acceso: base-de-datos/identidad-y-acceso.md
+      - Organizaciones evaluadas: base-de-datos/organizaciones-evaluadas.md
+      - Herramientas: base-de-datos/herramientas.md
+      - Evaluaciones y planes: base-de-datos/evaluaciones-y-planes.md
+      - Auditoría: base-de-datos/auditoria.md
+      - Inteligencia artificial: base-de-datos/inteligencia-artificial.md
+      - Migraciones y consultas: base-de-datos/migraciones.md
+  - API: api.md
+  - Expandir:
+      - Servidor: como-expandir.md
+      - Web: web/como-expandir.md
+  - Operación:
+      - Manual técnico: manual-tecnico.md
+      - Pruebas y pipeline: pruebas-y-pipeline.md
+      - Entornos y secretos: entornos-y-secretos.md
+      - Monitoreo: monitoreo.md
+      - Respaldos: respaldos.md
+      - Seguridad: seguridad.md
+      - Rendimiento: rendimiento.md
+      - Lista de verificación: lista-verificacion.md
+      - Puesta en marcha: puesta-en-marcha.md
+  - Referencia:
+      - Servidor:
+          - referencia/index.md
+          - Arranque: referencia/arranque.md
+          - Módulo raíz: referencia/aplicacion.md
+          - identity: referencia/identity.md
+          - audit: referencia/audit.md
+          - assessment-core: referencia/assessment-core.md
+          - evaluation-tool: referencia/evaluation-tool.md
+          - organizational-tool: referencia/organizational-tool.md
+          - capacity-tool: referencia/capacity-tool.md
+          - risk-tool: referencia/risk-tool.md
+          - assessment-ai: referencia/assessment-ai.md
+          - assessment-analytics: referencia/assessment-analytics.md
+          - assessment-session: referencia/assessment-session.md
+          - Compartido: referencia/compartido.md
+          - Datos iniciales: referencia/datos-iniciales.md
+          - Scripts: referencia/scripts.md
+      - Web:
+          - web/referencia/index.md
+          - Arranque: web/referencia/arranque.md
+          - Aplicación: web/referencia/aplicacion.md
+          - auth: web/referencia/auth.md
+          - assessment-core: web/referencia/assessment-core.md
+          - indicator-tool: web/referencia/indicator-tool.md
+          - organizational-tool: web/referencia/organizational-tool.md
+          - capacity-tool: web/referencia/capacity-tool.md
+          - risk-tool: web/referencia/risk-tool.md
+          - analytics: web/referencia/analytics.md
+          - realtime: web/referencia/realtime.md
+          - Compartido: web/referencia/compartido.md

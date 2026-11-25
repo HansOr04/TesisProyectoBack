@@ -1,5 +1,3 @@
-// Vocabulario compartido por las tres herramientas y el núcleo.
-
 export const ASSESSMENT_TOOLS = ['ORGANIZATIONAL', 'CAPACITY', 'RISK'] as const;
 export type AssessmentToolCode = (typeof ASSESSMENT_TOOLS)[number];
 
@@ -24,11 +22,6 @@ export const ASSESSMENT_ROLE_CODES = [
 ] as const;
 export type AssessmentRoleCode = (typeof ASSESSMENT_ROLE_CODES)[number];
 
-/**
- * Qué organizaciones evaluadas ve un visualizador. Se guarda en
- * `AuthUserRole.customPermissions` de su rol `assessment_viewer`.
- * Sin configurar no ve ninguna: el administrador decide qué habilitarle.
- */
 export interface ViewerVisibility {
   allProfiles: boolean;
   profileIds: string[];
@@ -46,5 +39,4 @@ export function readViewerVisibility(raw: unknown): ViewerVisibility {
 
 export const ACTIVE_EVALUATION_STATUSES = ['DRAFT', 'IN_PROGRESS'] as const;
 
-/** score <= 5 ⇒ KPI crítico (regla transversal RF-03/04/05). */
 export const CRITICAL_THRESHOLD = 5;

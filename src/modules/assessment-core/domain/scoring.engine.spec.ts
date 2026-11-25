@@ -30,10 +30,6 @@ const ALL_ONES: SectionScoreInput[] = [
   },
 ];
 
-// Fixture mixto (2 secciones, pesos distintos de KPI y de sección):
-//   Sección A (weight=2): (1*8 + 1*4) / (1+1) = 6
-//   Sección B (weight=1): (2*10 + 1*1) / (2+1) = 21/3 = 7
-//   Global: (2*6 + 1*7) / (2+1) = 19/3 = 6.333... → 6.33
 const MIXED_WEIGHTED: SectionScoreInput[] = [
   {
     sectionId: 'A',

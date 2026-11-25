@@ -3,9 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 import { OAuthIdentity, OAuthVerifierPort } from '../domain/ports';
 
-// Login con Google (OAuth 2.0 / OpenID Connect). Gratis: solo requiere un
-// OAuth Client ID de Google Cloud Console. El frontend obtiene el id_token
-// con Google Identity Services y lo manda a POST /auth/google.
 @Injectable()
 export class GoogleOAuthVerifier implements OAuthVerifierPort {
   readonly provider = 'google';

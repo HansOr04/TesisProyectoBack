@@ -10,3 +10,7 @@ coverage/
 .stryker-tmp/
 reports/mutation/
 stryker.ci.json
+
+.sitio
+.sitio-publicado
+.web

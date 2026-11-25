@@ -6,7 +6,6 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(60 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
 const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
@@ -18,9 +17,6 @@ const EVALUATOR = {
 };
 const PASSWORD = 'clave-de-prueba-e2e';
 
-// Cada superadministrador administra solo los proyectos que creó; en uno
-// ajeno entra como cualquier miembro. El visualizador solo lee y solo las
-// organizaciones evaluadas que un administrador le habilitó.
 describe('Project ownership and viewers (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -72,7 +68,6 @@ describe('Project ownership and viewers (e2e)', () => {
     prisma = app.get(PrismaService);
     adminToken = await login(ADMIN);
 
-    // Segundo superadministrador, sin ningún proyecto propio todavía.
     const created = await as(adminToken)
       .post(`/${ORG}/users`, {
         email: otherEmail,
@@ -136,7 +131,6 @@ describe('Project ownership and viewers (e2e)', () => {
     expect(theirs.body.map((o: { id: string }) => o.id)).not.toContain(
       otherOrg,
     );
-    // Entra a su proyecto con el mismo token, sin volver a iniciar sesión.
     await as(otherToken).get(`/${otherOrg}/assessments/profiles`).expect(200);
   });
 
@@ -285,7 +279,6 @@ describe('Project ownership and viewers (e2e)', () => {
       .expect(201);
     const orgAdmin = await login({ email: orgAdminEmail, password: PASSWORD });
 
-    // Solo ve los proyectos de los que es miembro.
     await as(orgAdmin).get('/organisations').expect(403);
     await as(orgAdmin).get('/organisations/assignable-users').expect(403);
     await as(orgAdmin).get(`/${otherOrg}/assessments/profiles`).expect(403);
@@ -297,7 +290,6 @@ describe('Project ownership and viewers (e2e)', () => {
       ),
     ).toEqual([ORG]);
 
-    // No otorga superadmin, ni al crear ni al editar.
     await as(orgAdmin)
       .post(`/${ORG}/users`, {
         email: `otro-super-${suffix}@e2e.local`,
@@ -310,7 +302,6 @@ describe('Project ownership and viewers (e2e)', () => {
       .patch(`/${ORG}/users/${created.body.id}`, { isSuperAdmin: true })
       .expect(403);
 
-    // Tampoco toca la cuenta de un superadministrador de su proyecto.
     const users = await as(orgAdmin).get(`/${ORG}/users`).expect(200);
     const superAdmin = users.body.find(
       (u: { email: string }) => u.email === ADMIN.email,
@@ -323,7 +314,6 @@ describe('Project ownership and viewers (e2e)', () => {
       .expect(403);
     await login(ADMIN);
 
-    // Asignar una cuenta existente nunca le cambia la contraseña.
     await as(adminToken)
       .post(`/${otherOrg}/users`, {
         email: orgAdminEmail,

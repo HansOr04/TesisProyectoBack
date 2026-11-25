@@ -13,7 +13,6 @@ export class GeminiProvider implements AiProvider {
     private readonly httpService: HttpService,
     private readonly apiKey: string,
     private readonly model: string,
-    /** Modelo sin razonamiento previo, para respuestas dentro de un export. */
     private readonly fastModel: string = model,
   ) {}
 
@@ -62,8 +61,6 @@ export class GeminiProvider implements AiProvider {
         },
       ),
     );
-    // La respuesta puede venir partida en varias partes: se unen todas, sin
-    // las de razonamiento interno. Leer solo la primera cortaba el JSON.
     const parts = response.data.candidates?.[0]?.content?.parts ?? [];
     const usage = response.data.usageMetadata;
     return {

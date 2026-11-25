@@ -97,14 +97,11 @@ export class UpdateAssessmentProfileDto {
   @IsContactPhone()
   contactPhone?: string;
 
-  // `null` limpia explícitamente el evaluador asignado (a diferencia de
-  // `undefined`, que Prisma trata como "no tocar este campo").
   @IsOptional()
   @IsString()
   @MaxLength(64)
   evaluatorId?: string | null;
 
-  // Excluye este perfil de la vista cross-organización del Administrador (RF-08)
   @IsOptional()
   @IsBoolean()
   confidential?: boolean;

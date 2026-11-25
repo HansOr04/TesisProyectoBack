@@ -1,6 +1,3 @@
-// Funciones estadísticas puras usadas por la analítica. Sin dependencias:
-// fáciles de probar y de citar en la memoria de tesis.
-
 export function round(value: number, decimals = 2): number {
   const f = 10 ** decimals;
   return Math.round(value * f) / f;
@@ -20,7 +17,6 @@ export function median(values: number[]): number {
     : sorted[mid];
 }
 
-/** Desviación estándar muestral (n-1); 0 si hay menos de 2 valores. */
 export function stdDev(values: number[]): number {
   if (values.length < 2) return 0;
   const m = mean(values);
@@ -29,14 +25,12 @@ export function stdDev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-/** Percentil (0–100) que ocupa `value` dentro de `population` (fracción de valores ≤ value). */
 export function percentileRank(value: number, population: number[]): number {
   if (population.length === 0) return 0;
   const below = population.filter((v) => v <= value).length;
   return round((below / population.length) * 100, 0);
 }
 
-/** Coeficiente de correlación de Pearson; null si no hay variabilidad o n < 3. */
 export function pearson(xs: number[], ys: number[]): number | null {
   const n = Math.min(xs.length, ys.length);
   if (n < 3) return null;
@@ -73,7 +67,6 @@ export interface HistogramBin {
   count: number;
 }
 
-/** Histograma de valores 0–10 en `bins` intervalos iguales (el último incluye el 10). */
 export function histogram(
   values: number[],
   bins = 5,
@@ -107,11 +100,6 @@ function distance(a: number[], b: number[]): number {
   return Math.sqrt(s);
 }
 
-/**
- * K-means determinístico: centroides iniciales espaciados por el orden de la
- * suma de componentes (evita aleatoriedad para que el resultado sea
- * reproducible en la memoria). Lloyd hasta converger o `maxIterations`.
- */
 export function kMeans(
   points: number[][],
   k: number,
@@ -158,7 +146,6 @@ export function kMeans(
   };
 }
 
-/** Regresión lineal simple y = a + b·x; null si x no varía o n < 3. */
 export function linearRegression(
   xs: number[],
   ys: number[],

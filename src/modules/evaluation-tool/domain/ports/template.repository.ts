@@ -45,7 +45,6 @@ export interface TemplateRepository {
     tool: AssessmentToolCode,
   ): Promise<TemplateWithStructure | null>;
   countEvaluations(templateId: string): Promise<number>;
-  /** Clona la plantilla como nueva versión activa y desactiva la anterior. */
   cloneAsNewVersion(
     current: TemplateWithStructure,
     actorId?: string,
@@ -81,10 +80,5 @@ export interface TemplateRepository {
     indicatorId: string,
     input: IndicatorInput,
   ): Promise<IndicatorRecord>;
-  /**
-   * Un KPI nunca se borra: se desactiva. Deja de contar para las
-   * evaluaciones pero sigue apareciendo en la estructura y en la pantalla
-   * de KPI aplicables, para poder volver a encenderlo.
-   */
   deactivateIndicator(indicatorId: string): Promise<void>;
 }

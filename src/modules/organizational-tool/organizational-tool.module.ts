@@ -7,9 +7,6 @@ import { OrganizationalToolAiService } from './application/organizational-tool-a
 import { OrganizationalToolService } from './application/organizational-tool.service';
 import { OrganizationalToolController } from './presentation/controllers/organizational-tool.controller';
 
-// Herramienta Organizativa. El flujo genérico y los adaptadores de persistencia
-// vienen de EvaluationToolModule; del núcleo: auditoría, aplicabilidad, alcance
-// y guards; del módulo de IA: el cliente LLM; del de sesión: el gateway.
 @Module({
   imports: [
     AssessmentCoreModule,

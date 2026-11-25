@@ -19,11 +19,6 @@ async function bootstrap(): Promise<void> {
   });
   const config = app.get(ConfigService);
 
-  // Heroku atiende detrás de un enrutador que agrega X-Forwarded-For. Sin
-  // confiar en ese primer salto, req.ip era la del enrutador y los límites por
-  // IP (300 peticiones y 10 inicios de sesión por minuto) se compartían entre
-  // todos los usuarios de la plataforma: un taller podía quedarse sin poder
-  // iniciar sesión.
   app.set('trust proxy', 1);
 
   app.use(helmet());
@@ -32,8 +27,6 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: config.get<string>('CORS_ORIGIN')?.split(',') ?? '*',
     credentials: true,
-    // Sin esto el navegador repite el preflight OPTIONS antes de cada
-    // PUT/POST, un viaje de red extra por guardado. 7200 s es el tope de Chrome.
     maxAge: 7200,
   });
   app.useGlobalFilters(
@@ -43,11 +36,9 @@ async function bootstrap(): Promise<void> {
     ),
   );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  // Socket.IO para AssessmentSessionGateway (NestFactory no lo enlaza solo)
   app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
-  // En producción la documentación de la API queda cerrada, salvo que se pida.
   const swaggerEnabled =
     config.get('NODE_ENV') !== 'production' ||
     config.get('SWAGGER_ENABLED') === 'true';

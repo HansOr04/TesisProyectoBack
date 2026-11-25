@@ -19,7 +19,6 @@ export class CreateOrganisationUserDto {
   @MaxLength(120)
   name: string;
 
-  // Opcional: sin contraseña el usuario solo podrá entrar por OAuth.
   @IsOptional()
   @IsString()
   @MinLength(8)
@@ -30,7 +29,6 @@ export class CreateOrganisationUserDto {
   @IsIn(ASSESSMENT_ROLE_CODES)
   roleCode?: (typeof ASSESSMENT_ROLE_CODES)[number];
 
-  // Solo un superadmin puede otorgarlo.
   @IsOptional()
   @IsBoolean()
   isSuperAdmin?: boolean;
@@ -56,13 +54,11 @@ export class UpdateOrganisationUserDto {
   @IsBoolean()
   isSuperAdmin?: boolean;
 
-  // Rol de evaluación dentro de la organización; null = sin rol.
   @IsOptional()
   @IsIn([...ASSESSMENT_ROLE_CODES, null])
   roleCode?: (typeof ASSESSMENT_ROLE_CODES)[number] | null;
 }
 
-/** Organizaciones evaluadas que ve un visualizador. */
 export class ViewerVisibilityDto {
   @IsBoolean()
   allProfiles: boolean;

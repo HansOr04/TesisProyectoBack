@@ -9,13 +9,6 @@ export interface AssessmentProfileApplicability {
   excludedIndicatorIds: string[];
 }
 
-// RF-02/03/04/05: aplicabilidad por organización — un perfil puede marcar
-// secciones/indicadores completos como "no aplica" (p.ej. "aplica solo si la
-// organización realiza aprovechamiento forestal"), independiente de la
-// plantilla compartida por el resto de organizaciones del mismo tenant.
-// No depende de AssessmentProfilesService a propósito: así puede añadirse como
-// provider standalone en cada módulo de herramienta (Organizativa/Riesgos/Capacity) sin
-// arrastrar el resto del grafo de AssessmentCoreModule.
 @Injectable()
 export class AssessmentApplicabilityService {
   constructor(
@@ -110,19 +103,6 @@ export class AssessmentApplicabilityService {
     };
   }
 
-  /**
-   * Las exclusiones se guardan por id de sección/indicador, pero cada versión
-   * de plantilla crea filas nuevas con ids nuevos. Sin expandir, marcar "no
-   * aplica" sobre la plantilla activa no tendría efecto en una evaluación que
-   * corre sobre una versión anterior — que es justo lo que pasaba en
-   * producción: TSAPAU evaluaba con la v1 y el diálogo editaba la v2.
-   *
-   * Lo que identifica de verdad a un KPI entre versiones es su código, y a
-   * una sección su número. Se expande por ahí, acotado siempre a la misma
-   * organización y herramienta: desde que los códigos son "KPI X.Y" en las
-   * tres herramientas, sin acotar por herramienta excluir "KPI 1.1" en
-   * Organizativa también lo excluiría en Capacidades y en Riesgos.
-   */
   private async expandExclusions(
     profileIds: string[],
   ): Promise<
@@ -192,7 +172,6 @@ export class AssessmentApplicabilityService {
         };
       });
 
-    // Todas las secciones/indicadores equivalentes, en cualquier versión.
     const [sections, indicators] = await Promise.all([
       numbersByScope.size === 0
         ? []
@@ -271,9 +250,6 @@ export class AssessmentApplicabilityService {
     return result;
   }
 
-  // Usado por los servicios de scoring de cada herramienta: expande la
-  // exclusión por sección (todos sus indicadores) + la exclusión directa por
-  // indicador en un único Set de indicatorId no aplicables para el perfil.
   async resolveExcludedIndicatorIds(profileId: string): Promise<Set<string>> {
     const expanded = await this.expandExclusions([profileId]);
     return expanded.get(profileId)?.indicatorIds ?? new Set<string>();
@@ -284,7 +260,6 @@ export class AssessmentApplicabilityService {
     return expanded.get(profileId)?.sectionIds ?? new Set<string>();
   }
 
-  // Versiones por lote (evitan N+1 en paneles): { profileId → Set<id> }.
   async resolveExcludedIndicatorIdsForProfiles(
     profileIds: string[],
   ): Promise<Map<string, Set<string>>> {

@@ -30,7 +30,6 @@ export type SegmentKey = 'country' | 'region' | 'type' | 'mainProduct';
 
 const MIN_SAMPLE = 3;
 
-/** Última evaluación con respuestas por perfil (estado actual), y las completadas ordenadas (histórico). */
 function latestByProfile(
   tool: AnalyticsToolDataset,
 ): Map<string, AnalyticsEvaluation> {
@@ -66,9 +65,6 @@ function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Analítica descriptiva, comparativa y de efectividad sobre las evaluaciones.
-// Todo es determinístico (sin IA) y reproducible: cada método documenta la
-// fórmula que usa para poder citarla en la memoria.
 @Injectable()
 export class AssessmentAnalyticsService {
   constructor(
@@ -79,7 +75,6 @@ export class AssessmentAnalyticsService {
     return this.datasets.load(organisation, scope);
   }
 
-  // ── 1. Panorama ──────────────────────────────────────────────────────────
   async overview(organisation: string, scope: AnalyticsProfileScope) {
     const data = await this.load(organisation, scope);
     const perTool = ASSESSMENT_TOOLS.map((tool) => {
@@ -146,7 +141,6 @@ export class AssessmentAnalyticsService {
       };
     });
 
-    // Tendencia mensual de evaluaciones completadas (promedio de puntaje global).
     const trendMap = new Map<string, Record<string, number[]>>();
     for (const tool of ASSESSMENT_TOOLS) {
       for (const e of data.tools[tool].evaluations) {
@@ -189,10 +183,6 @@ export class AssessmentAnalyticsService {
     };
   }
 
-  // ── 2. Brechas sistémicas ────────────────────────────────────────────────
-  // prioridad = tasa crítica × peso del KPI × (umbral + 1 − promedio): un KPI
-  // que falla en muchas organizaciones, pesa mucho y tiene promedio bajo
-  // sube al tope — es la brecha que más conviene atacar de forma colectiva.
   async systemicGaps(
     organisation: string,
     scope: AnalyticsProfileScope,
@@ -215,8 +205,6 @@ export class AssessmentAnalyticsService {
         ).length;
         const criticalRate = scores.length ? criticalCount / scores.length : 0;
         const avg = mean(scores);
-        // Organizaciones donde este KPI es crítico, con su puntaje y si ya
-        // registraron una medida — alimenta el detalle expandible del ranking.
         const criticalOrganisations = latest
           .map((e) => {
             const response = e.responses.find(
@@ -287,14 +275,12 @@ export class AssessmentAnalyticsService {
     };
   }
 
-  // ── 3. Correlaciones y drivers ───────────────────────────────────────────
   async correlations(organisation: string, scope: AnalyticsProfileScope) {
     const data = await this.load(organisation, scope);
     const latest = Object.fromEntries(
       ASSESSMENT_TOOLS.map((t) => [t, latestByProfile(data.tools[t])]),
     ) as Record<AssessmentToolCode, Map<string, AnalyticsEvaluation>>;
 
-    // Drivers: correlación de cada sección con el puntaje global de su herramienta.
     const drivers = ASSESSMENT_TOOLS.map((tool) => {
       const evals = [...latest[tool].values()].filter(
         (e) => e.globalScore !== null,
@@ -327,7 +313,6 @@ export class AssessmentAnalyticsService {
       };
     });
 
-    // Cruce entre herramientas: sección de A vs sección de B, sobre organizaciones con ambas.
     const crossTool: {
       toolA: AssessmentToolCode;
       sectionA: number;
@@ -378,7 +363,6 @@ export class AssessmentAnalyticsService {
       .sort((x, y) => Math.abs(y.r as number) - Math.abs(x.r as number))
       .slice(0, 10);
 
-    // Puntaje global entre herramientas (¿la organización fuerte en una lo es en las demás?).
     const globalCross = pairs.map(([a, b]) => {
       const shared = [...latest[a].keys()].filter((id) => latest[b].has(id));
       const xs = shared
@@ -402,7 +386,6 @@ export class AssessmentAnalyticsService {
       };
     });
 
-    // Factores del perfil: tamaño (socios) y antigüedad vs puntaje global.
     const year = new Date().getFullYear();
     const profileById = new Map(data.profiles.map((p) => [p.id, p]));
     const profileFactors = ASSESSMENT_TOOLS.map((tool) => {
@@ -459,7 +442,6 @@ export class AssessmentAnalyticsService {
     };
   }
 
-  // ── 4. Segmentación ──────────────────────────────────────────────────────
   async segments(
     organisation: string,
     scope: AnalyticsProfileScope,
@@ -513,13 +495,6 @@ export class AssessmentAnalyticsService {
     return { by, segments: rows };
   }
 
-  // ── 5. Efectividad de las medidas ────────────────────────────────────────
-  // Para cada organización con ≥ 2 evaluaciones completadas de una herramienta
-  // compara, KPI por KPI, la primera con la última: Δ = último − primero.
-  // Separa los KPI críticos que recibieron una medida (concluida / en curso)
-  // de los que no la recibieron. Si Δ(con medida) > Δ(sin medida) las medidas
-  // están funcionando; el ratio de medidas concluidas se correlaciona con la
-  // mejora global.
   async measureEffectiveness(
     organisation: string,
     scope: AnalyticsProfileScope,
@@ -628,7 +603,6 @@ export class AssessmentAnalyticsService {
     return { perTool };
   }
 
-  // ── 6. Clústeres (k-means sobre el perfil de secciones) ──────────────────
   async clusters(
     organisation: string,
     scope: AnalyticsProfileScope,
@@ -656,8 +630,6 @@ export class AssessmentAnalyticsService {
         .sort((a, b) => b.value - a.value);
       return {
         index: ci,
-        // `level` es el código estable (el cliente lo traduce); `label` se
-        // conserva por compatibilidad.
         level:
           avg >= 7
             ? ('HIGH' as const)
@@ -698,7 +670,6 @@ export class AssessmentAnalyticsService {
     };
   }
 
-  // ── 7. Posición relativa de una organización (benchmark) ─────────────────
   async benchmark(
     organisation: string,
     scope: AnalyticsProfileScope,

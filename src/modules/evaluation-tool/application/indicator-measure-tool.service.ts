@@ -47,8 +47,6 @@ export type UpdateMeasureInput = Omit<
   'status' | 'updatedBy'
 >;
 
-// AiCriticalItem lleva solo lo que necesita el prompt de IA; weight se agrega
-// acá para poder calcular impactScore (prioridad) sin otra consulta.
 interface CriticalItemWithWeight extends AiCriticalItem {
   weight: number;
 }
@@ -59,11 +57,6 @@ export function measureStatusFor(progressPct: number): MeasureStatus {
   return 'PENDING';
 }
 
-/**
- * Herramienta cuyo plan de acción liga medidas directamente a KPI críticos
- * (Organizativa y de Capacidades). Añade al flujo común: medidas por
- * indicador, exportes Excel/PPTX, asistencia con IA y prioridad de impacto.
- */
 export abstract class IndicatorMeasureToolService extends EvaluationToolService {
   protected constructor(
     definition: EvaluationToolDefinition,
@@ -94,8 +87,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     return this.measures.countByEvaluations(organisation, evaluationIds);
   }
 
-  // ── Exportes ─────────────────────────────────────────────────────────────
-
   async summaryExport(
     organisation: string,
     evaluationId: string,
@@ -117,9 +108,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     return file;
   }
 
-  // Reporte en diapositivas: mismo dato del resumen más un análisis de
-  // calidad generado por IA (una sola llamada por export). Si la IA falla el
-  // reporte se genera igual sin esas diapositivas.
   async summaryExportPptx(
     organisation: string,
     evaluationId: string,
@@ -191,8 +179,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     );
     return file;
   }
-
-  // ── Plan de acción (KPI crítico → medida) ────────────────────────────────
 
   async listMeasures(organisation: string, evaluationId: string) {
     await this.getEvaluationOrThrow(organisation, evaluationId);
@@ -284,8 +270,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     return updated;
   }
 
-  // ── Sugerencias de medidas con IA y prioridad de impacto ─────────────
-
   protected getCriticalItemsWithoutMeasure(
     evaluation: EvaluationWithStructure,
     section: EvaluationWithStructure['template']['sections'][number],
@@ -358,9 +342,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     return { suggestions };
   }
 
-  // Plan de acción completo: llama a la IA UNA VEZ POR SECCIÓN (nunca con
-  // todos los KPI críticos juntos), saltando las secciones sin KPI crítico
-  // pendiente. Devuelve una sola lista ordenada por prioridad de impacto.
   async suggestMeasuresForEvaluation(
     organisation: string,
     evaluationId: string,
@@ -408,8 +389,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
           ...suggestion,
           code: item.code,
           score: item.score,
-          // Prioridad de impacto: peso del indicador × brecha bajo el umbral
-          // de criticidad — determinístico y sin costo de IA adicional.
           impactScore: item.weight * (CRITICAL_THRESHOLD - item.score),
           sectionNumber: section.number,
           sectionName: section.name,
@@ -434,8 +413,6 @@ export abstract class IndicatorMeasureToolService extends EvaluationToolService 
     return { suggestions: allSuggestions };
   }
 
-  // Prioridad de impacto: ranking determinístico (peso × brecha bajo el
-  // umbral) de los KPI críticos aún sin medida — no llama a la IA.
   async getImpactPriority(organisation: string, evaluationId: string) {
     const evaluation = await this.getEvaluationOrThrow(
       organisation,

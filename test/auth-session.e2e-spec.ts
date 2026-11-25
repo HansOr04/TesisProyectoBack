@@ -8,7 +8,6 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(60 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
   password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
@@ -69,14 +68,11 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     const second = refreshCookie(refreshed) as string;
     expect(second).not.toBe(first);
 
-    // El token nuevo sirve para la API.
     await api()
       .get('/auth/me')
       .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
       .expect(200);
 
-    // Pasado el margen de pestañas simultáneas, reusar el token ya rotado →
-    // 401 y toda la familia queda revocada.
     await app.get(PrismaService).refreshToken.update({
       where: { tokenHash: hashOf(first) },
       data: { revokedAt: new Date(Date.now() - 60 * 1000) },
@@ -85,7 +81,6 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     await api().post('/auth/refresh').set('Cookie', second).expect(401);
   });
 
-  // HU-71, CA-71.1: las dos pestañas mandan la misma cookie.
   it('two tabs refreshing at the same time both keep the session', async () => {
     const login = await api().post('/auth/login').send(ADMIN).expect(200);
     const shared = refreshCookie(login) as string;
@@ -98,7 +93,6 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     const cookies = tabs.map((t) => refreshCookie(t) as string);
     expect(new Set(cookies).size).toBe(3);
 
-    // Cada pestaña sigue renovando con la cookie que le quedó.
     for (const cookie of cookies) {
       await api().post('/auth/refresh').set('Cookie', cookie).expect(200);
     }
@@ -118,8 +112,6 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     await api().post('/auth/refresh').set('Cookie', second).expect(401);
   });
 
-  // HU-71, CA-71.2: más de 24 h de trabajo. El token de acceso ya venció y la
-  // sesión se renueva con la cookie, sin pedir la contraseña.
   it('renews without the password after more than 24 hours', async () => {
     const login = await api().post('/auth/login').send(ADMIN).expect(200);
     const cookie = refreshCookie(login) as string;
@@ -150,7 +142,6 @@ describe('Auth session: refresh token rotation (e2e)', () => {
     for (let i = 0; i < 10; i++) await attempt(email).expect(401);
     const blocked = await attempt(email).expect(429);
     expect(blocked.body.message).toContain('Demasiados intentos');
-    // Otra persona detrás de la misma IP puede entrar.
     await attempt(`otra-${email}`).expect(401);
   });
 

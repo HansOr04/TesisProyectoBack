@@ -35,9 +35,6 @@ ${ANTI_HALLUCINATION_RULE}
 Responde EXCLUSIVAMENTE con un array JSON válido, sin texto adicional antes o después, con este formato exacto:
 [{"indicatorId": "...", "description": "..."}]`;
 
-// Asistencia de IA de la Herramienta de Riesgos: hereda las capacidades
-// comunes (observaciones, inconsistencias, narrativa, insights) y añade la
-// sugerencia de medidas de mitigación a partir de riesgos no despreciables.
 @Injectable()
 export class RiskToolAiService extends EvaluationToolAiService {
   constructor(
@@ -47,7 +44,6 @@ export class RiskToolAiService extends EvaluationToolAiService {
     super(RISK_AI_CONTEXT, llmClient, logger);
   }
 
-  // Se llama con los riesgos de UN solo principio a la vez.
   async suggestMeasuresForPrinciple(
     principleName: string,
     riskItems: AiRiskItem[],
@@ -85,8 +81,6 @@ export class RiskToolAiService extends EvaluationToolAiService {
   }
 }
 
-// Anti-alucinación: toda sugerencia con un indicatorId fuera de la lista
-// pedida se descarta.
 export function parseAiRiskMeasureSuggestions(
   raw: string,
   validIndicatorIds: string[],

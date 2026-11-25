@@ -2,9 +2,6 @@ import { Injectable, Scope } from '@nestjs/common';
 
 export type LogContext = Record<string, unknown>;
 
-// Logger estructurado (una línea JSON por evento en producción, texto legible
-// en desarrollo). Instancia transitoria: cada servicio fija su propio contexto
-// con setContext() sin pisar el de los demás.
 @Injectable({ scope: Scope.TRANSIENT })
 export class StructuredLoggerService {
   private context: LogContext = {};

@@ -1,9 +1,5 @@
 import { AssessmentToolCode } from '../../assessment-core/domain/assessment.constants';
 
-// Dataset neutro (independiente de Prisma) sobre el que trabaja la analítica.
-// Las claves de comparación entre evaluaciones son el código del KPI y el
-// número de sección, estables entre versiones de plantilla.
-
 export interface AnalyticsProfile {
   id: string;
   name: string;
@@ -48,9 +44,7 @@ export interface AnalyticsEvaluation {
   status: string;
   startedAt: Date;
   completedAt: Date | null;
-  /** Puntaje global recalculado con la misma estrategia ponderada de las herramientas. */
   globalScore: number | null;
-  /** Promedio ponderado por sección (número de sección → puntaje). */
   sectionScores: Record<number, number>;
   responses: AnalyticsResponse[];
   measures: AnalyticsMeasure[];
@@ -70,13 +64,11 @@ export interface AnalyticsDataset {
 
 export const ANALYTICS_DATASET = Symbol('ANALYTICS_DATASET');
 
-/** Mismo recorte que AssessmentProfileScope: filtro Prisma sobre el perfil. */
 export interface AnalyticsProfileScope {
   evaluatorId?: string;
   AND?: { id: { in: string[] } }[];
 }
 
-/** Puerto: quien provea el dataset (Prisma hoy) no condiciona los cálculos. */
 export interface AnalyticsDatasetPort {
   load(
     organisation: string,

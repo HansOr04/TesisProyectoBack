@@ -4,7 +4,6 @@ import { ASSESSMENT_MODULE_CODES } from '../../../assessment-core/domain/assessm
 import { createIndicatorToolController } from '../../../evaluation-tool/presentation/indicator-tool.controller.factory';
 import { OrganizationalToolService } from '../../application/organizational-tool.service';
 
-// Herramienta Organizativa — rutas /:org/assessments/organizational/*.
 @ApiTags('Herramienta Organizativa')
 @ApiBearerAuth()
 @Controller()

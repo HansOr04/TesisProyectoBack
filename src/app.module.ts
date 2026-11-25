@@ -22,9 +22,6 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    // Límite global generoso, por usuario con sesión (UserThrottlerGuard, en
-    // IdentityModule); los endpoints de IA aplican su propio límite por usuario
-    // (AssessmentAiThrottlerGuard, 10/min).
     ThrottlerModule.forRoot({
       errorMessage: 'Demasiados intentos. Espera un minuto y vuelve a probar.',
       throttlers: [{ name: 'default', ttl: 60000, limit: 300 }, ipThrottler],

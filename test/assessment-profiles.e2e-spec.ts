@@ -6,9 +6,6 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(60 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
-// Usa las cuentas del seed: admin (superadmin + assessment_admin) y evaluador
-// (assessment_evaluator, sin perfiles asignados).
 const ORG = process.env.SEED_ORGANISATION_ID || 'demo';
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
@@ -125,8 +122,6 @@ describe('Assessment profiles (e2e)', () => {
       .expect(404);
   });
 
-  // Flujo del asistente en modo edición: se reenvían todos los datos del alta
-  // y la aplicabilidad de KPI en la misma operación.
   it('edits every field captured by the wizard, including applicability', async () => {
     const created = await request(app.getHttpServer())
       .post(`/${ORG}/assessments/profiles`)
@@ -164,7 +159,6 @@ describe('Assessment profiles (e2e)', () => {
       .expect(200);
     expect(updated.body).toMatchObject(changes);
 
-    // La aplicabilidad se guarda aparte pero desde el mismo paso del asistente.
     const template = await request(app.getHttpServer())
       .get(`/${ORG}/assessments/organizational/templates`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -188,7 +182,6 @@ describe('Assessment profiles (e2e)', () => {
       section.indicators[0].id,
     ]);
 
-    // Y se puede volver a dejar sin exclusiones (quitar también es editar).
     await request(app.getHttpServer())
       .put(`/${ORG}/assessments/profiles/${created.body.id}/applicability`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -238,7 +231,6 @@ describe('Assessment profiles (e2e)', () => {
       .expect(400);
   });
 
-  // El número de socios dejó de ser opcional: sin él (o en 0) no se da de alta.
   it('requires the member count (at least 1)', async () => {
     const base = {
       name: `E2E Sin socios ${Date.now()}`,
@@ -337,7 +329,6 @@ describe('Assessment profiles (e2e)', () => {
     const p = profile.body.id as string;
     const e = evaluation.body.id as string;
 
-    // Sin asignar: el evaluador no llega a la organización ni a lo que cuelga de ella.
     await evaluator.get(`profiles/${p}`).expect(404);
     await evaluator.get(`profiles/${p}/applicability`).expect(404);
     await evaluator
@@ -366,7 +357,6 @@ describe('Assessment profiles (e2e)', () => {
     const list = await evaluator.get('organizational/evaluations').expect(200);
     expect(list.body.map((x: { id: string }) => x.id)).not.toContain(e);
 
-    // Asignada: entra, edita sus datos, pero no puede reasignarla.
     const me = await request(app.getHttpServer())
       .get('/auth/me')
       .set('Authorization', `Bearer ${evaluatorToken}`)
@@ -382,7 +372,6 @@ describe('Assessment profiles (e2e)', () => {
       .send('patch', `profiles/${p}`, { evaluatorId: null })
       .expect(403);
 
-    // Lo que crea el evaluador queda a su cargo y lo sigue viendo.
     const own = await evaluator
       .send('post', 'profiles', {
         name: `E2E Creada por evaluador ${Date.now()}`,

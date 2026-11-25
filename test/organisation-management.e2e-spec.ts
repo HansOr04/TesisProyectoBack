@@ -6,7 +6,6 @@ import { PrismaService } from '../src/shared/infrastructure/database/prisma.serv
 
 jest.setTimeout(120 * 1000);
 
-// Requiere la BD de docker-compose migrada y sembrada (npm run bootstrap).
 const ADMIN = {
   email: process.env.SEED_ADMIN_EMAIL || 'admin@evaluacion.local',
   password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
@@ -42,7 +41,6 @@ describe('Organisation management (e2e)', () => {
   });
 
   afterAll(async () => {
-    // Orden inverso a las dependencias; la organización de prueba se queda sin rastro.
     const evaluations = await prisma.assessmentEvaluation.findMany({
       where: { organisation: { in: orgs } },
       select: { id: true },
@@ -104,7 +102,6 @@ describe('Organisation management (e2e)', () => {
       name: 'Organización E2E',
       templates: 3,
     });
-    // Las tres herramientas quedan sembradas con sus KPI reales.
     const byTool = Object.fromEntries(
       res.body.templates.map((t: { tool: string; indicators: number }) => [
         t.tool,
@@ -114,7 +111,6 @@ describe('Organisation management (e2e)', () => {
     expect(byTool).toEqual({ ORGANIZATIONAL: 73, CAPACITY: 30, RISK: 46 });
     expect(res.body.admin.email).toBe(ADMIN.email);
 
-    // El administrador puede operar de inmediato en la organización nueva.
     const profile = await api()
       .post(`/${orgId}/assessments/profiles`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -160,7 +156,6 @@ describe('Organisation management (e2e)', () => {
   });
 
   it('assigns an existing user as administrator without touching their password', async () => {
-    // Con contraseña, se rechaza: no puede cambiarse la de otra persona.
     await api()
       .post('/organisations')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -171,7 +166,6 @@ describe('Organisation management (e2e)', () => {
         adminPassword: 'otra-clave-123',
       })
       .expect(409);
-    // Rechazado antes de crear nada: no queda un proyecto a medio configurar.
     expect(
       await prisma.organisation.findUnique({ where: { id: orgWithAdmin } }),
     ).toBeNull();
